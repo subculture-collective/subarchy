@@ -130,7 +130,9 @@ the Omarchy inventory in `docs/inventory/generated/`.
 
 ## Contributing
 
-Open a pull request on GitHub against `main`. CI runs `make verify`, builds
+Report bugs and request features in
+[GitHub issues](https://github.com/subculture-collective/subarchy/issues).
+For code, open a pull request on GitHub against `main`. CI runs `make verify`, builds
 and checks the pacman package in an Arch container, and runs the shell tests,
 lint and a headless shell session on every pull request; all must pass before
 it merges.

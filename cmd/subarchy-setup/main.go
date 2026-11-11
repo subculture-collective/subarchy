@@ -124,6 +124,8 @@ type env struct {
 	// screens is the full-screen interface, on a virtual console with
 	// gum; nil means the plain prompts.
 	screens *screens
+	// installLog is where subarchy-install writes its output.
+	installLog string
 }
 
 // collect asks every question and returns the answers.
@@ -316,7 +318,7 @@ func failed(p *prompter, e env, cause error) {
 	}
 }
 
-func run(args []string, stdin io.Reader, stdout io.Writer, e env, secret func() (string, error), exec func(conf string) error) int {
+func run(args []string, stdin io.Reader, stdout io.Writer, e env, secret func() (string, error), exec func(conf string, quiet bool) error) int {
 	fs := flag.NewFlagSet("subarchy-setup", flag.ContinueOnError)
 	fs.SetOutput(stdout)
 	repo := fs.String("repo", "file:///opt/subarchy/repo", "pacman Server URL of the [subarchy] repository")
@@ -381,7 +383,19 @@ func run(args []string, stdin io.Reader, stdout io.Writer, e env, secret func() 
 		return 0
 	}
 	started := time.Now()
-	if err := exec(conf); err != nil {
+	if e.screens != nil {
+		// Full screen: the install view in place of the raw output.
+		stop := e.screens.progress(e.installLog)
+		err := exec(conf, true)
+		stop()
+		if err != nil {
+			e.screens.failedScreen(e, err)
+			return 1
+		}
+		e.screens.finishedScreen(e, time.Since(started))
+		return 0
+	}
+	if err := exec(conf, false); err != nil {
 		failed(p, e, err)
 		return 1
 	}
@@ -413,9 +427,10 @@ func main() {
 		loadKeymap: func(keymap string) error {
 			return exec.Command("loadkeys", keymap).Run()
 		},
-		browse:  browse,
-		logTail: logTail,
-		action:  action,
+		browse:     browse,
+		installLog: installLog,
+		logTail:    logTail,
+		action:     action,
 	}
 	if onConsole() {
 		prepareConsole(os.Stdout)
@@ -423,9 +438,11 @@ func main() {
 	}
 	// The installer runs as a child so its result can be shown: the time
 	// it took and a reboot offer, or the failure menu.
-	installer := func(conf string) error {
+	installer := func(conf string, quiet bool) error {
 		cmd := exec.Command("subarchy-install", "--config", conf, "--yes")
-		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		if !quiet {
+			cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		}
 		return cmd.Run()
 	}
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, e, secret, installer))

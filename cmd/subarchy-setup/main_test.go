@@ -30,7 +30,10 @@ func testEnv(t *testing.T) env {
 			t.Fatal(err)
 		}
 	}
+	gen := filepath.Join(t.TempDir(), "locale.gen")
+	os.WriteFile(gen, []byte("#de_DE.UTF-8 UTF-8\nen_US.UTF-8 UTF-8\n#en_GB.UTF-8 UTF-8\n"), 0o644)
 	return env{
+		localeGen:    gen,
 		lsblk:        func() ([]byte, error) { return []byte(lsblkJSON), nil },
 		installMedia: func() string { return "/dev/sr0" },
 		zoneinfo:     zi,

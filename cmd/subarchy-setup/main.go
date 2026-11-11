@@ -112,6 +112,8 @@ type env struct {
 	// kbdModelMap is systemd's table from console keymaps to desktop
 	// layouts (/usr/share/systemd/kbd-model-map).
 	kbdModelMap string
+	// localeGen lists the locales the installed system can use.
+	localeGen string
 	// loadKeymap makes the console use a keymap now (loadkeys).
 	loadKeymap func(keymap string) error
 	// browse shows a disk's filesystems read-only until the user leaves.
@@ -424,6 +426,7 @@ func main() {
 		zoneinfo:     "/usr/share/zoneinfo",
 		keymaps:      "/usr/share/kbd/keymaps",
 		kbdModelMap:  "/usr/share/systemd/kbd-model-map",
+		localeGen:    "/etc/locale.gen",
 		loadKeymap: func(keymap string) error {
 			return exec.Command("loadkeys", keymap).Run()
 		},

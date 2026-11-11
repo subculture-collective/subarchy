@@ -15,6 +15,8 @@ itself on the first console; on a serial console or over SSH, run
 On a virtual console it is full-screen (`screens.go`; the flow follows
 Omarchy's installer): a greeter, then one cleared screen per question
 under the SUBCULT mark, with `gum` drawing the lists and inputs. The
+language screen sets the installed system's locale (the installer stays
+in English) and preselects that language's usual keyboard. The
 keyboard comes from a labelled list, the time zone from a searchable
 list, and the disk from a list that shows what is on each one. After
 choosing a disk the user can install there, browse it read-only first, or

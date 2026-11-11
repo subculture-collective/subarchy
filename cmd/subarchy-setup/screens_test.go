@@ -56,6 +56,7 @@ func TestScreensInstall(t *testing.T) {
 	var looked []string
 	e.browse = func(d setup.Disk) error { looked = append(looked, d.Path); return nil }
 	s, g, out := testScreens(t,
+		"German",        // language, which preselects the German keyboard
 		"German",        // keyboard
 		"Europe/Berlin", // time zone
 		"root", "pat",   // user name: refused, then accepted
@@ -96,7 +97,7 @@ func TestScreensInstall(t *testing.T) {
 		t.Errorf("unused answers: %v", g.answers)
 	}
 	conf, _ := os.ReadFile(filepath.Join(dir, "install.conf"))
-	for _, want := range []string{"DISK=/dev/vda", "HOSTNAME=box", "USERNAME=pat", "TIMEZONE=Europe/Berlin", "KEYMAP=de-latin1", "XKB_LAYOUT=de"} {
+	for _, want := range []string{"DISK=/dev/vda", "HOSTNAME=box", "USERNAME=pat", "TIMEZONE=Europe/Berlin", "KEYMAP=de-latin1", "XKB_LAYOUT=de", "LOCALE=de_DE.UTF-8"} {
 		if !strings.Contains(string(conf), want+"\n") {
 			t.Errorf("config lacks %q:\n%s", want, conf)
 		}
@@ -113,6 +114,9 @@ func TestScreensInstall(t *testing.T) {
 		if !strings.Contains(out.String()+callText(g), want) {
 			t.Errorf("screens lack %q", want)
 		}
+	}
+	if !strings.Contains(callText(g), "--header Keyboard layout --padding 0 0 0 29 --cursor.foreground 2 --header.foreground 5 --selected.foreground 2 --selected German") {
+		t.Error("choosing German did not preselect the German keyboard")
 	}
 	if !strings.Contains(callText(g), "[vfat EFI, ntfs Windows]") || !strings.Contains(callText(g), "[empty]") {
 		t.Errorf("disk rows lack the partition summary: %s", callText(g))
@@ -135,7 +139,7 @@ func callText(g *fakeGum) string {
 // the greeter.
 func TestScreensEscape(t *testing.T) {
 	e := testEnv(t)
-	s, _, _ := testScreens(t, "German", "<esc>", "<esc>")
+	s, _, _ := testScreens(t, "German", "German", "<esc>", "<esc>", "<esc>")
 	keys := []bool{true, false} // greeter: start, then leave
 	s.key = func() bool { k := keys[0]; keys = keys[1:]; return k }
 	e.screens = s
@@ -184,7 +188,7 @@ func TestProgressOf(t *testing.T) {
 // With screens, the install shows the progress view and ends on the
 // finish screen (reboot) or the failure menu.
 func TestScreensInstallEnd(t *testing.T) {
-	answers := []string{"English (US)", "UTC", "pat", "secret-one", "secret-one", "", "", "", "<row:/dev/vda>", "Install here", ""}
+	answers := []string{"English (US)", "English (US)", "UTC", "pat", "secret-one", "secret-one", "", "", "", "<row:/dev/vda>", "Install here", ""}
 	setupRun := func(extra []string, fail bool) (int, []string, string) {
 		e := testEnv(t)
 		e.installLog = filepath.Join(t.TempDir(), "install.log")

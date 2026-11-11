@@ -188,6 +188,7 @@ def guided(serial: Serial, qmp: Path, timeout: float) -> str:
     )
     steps = [
         ("Press Return to start the install", ["ret"]),
+        ("Language", ["ret"]),  # English (US) is first
         ("Keyboard layout", ["ret"]),  # English (US) is selected
         ("Time zone", "chicago"),
         ("America/Chicago", ["ret"]),

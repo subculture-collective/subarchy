@@ -79,8 +79,18 @@ func logoWidth() int {
 
 func (s *screens) padding() string { return fmt.Sprintf("0 0 0 %d", s.pad()) }
 
+// sgr is the escape sequence for a palette colour as text colour: 30-37
+// for the first eight, 90-97 for the bright eight.
+func sgr(colour string) string {
+	n := int(colour[0] - '0')
+	if len(colour) > 1 || n > 7 {
+		return fmt.Sprintf("\x1b[9%dm", n-8)
+	}
+	return fmt.Sprintf("\x1b[3%dm", n)
+}
+
 func (s *screens) line(colour, text string) {
-	fmt.Fprintf(s.out, "%*s\x1b[3%sm%s\x1b[0m\n", s.pad(), "", colour, text)
+	fmt.Fprintf(s.out, "%*s%s%s\x1b[0m\n", s.pad(), "", sgr(colour), text)
 }
 
 // page clears the screen and draws the mark, a title and body lines.

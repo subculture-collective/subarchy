@@ -113,7 +113,7 @@ func (s *screens) drawProgress(permille int, label string, took time.Duration, t
 	width := logoWidth()
 	fmt.Fprintf(s.out, "\n%*s\x1b[3%smInstalling Subarchy\x1b[0m\x1b[K\n\n", s.pad(), "", colPaper)
 	fmt.Fprintf(s.out, "%*s\x1b[3%sm%s\x1b[3%sm %3d%%\x1b[0m\x1b[K\n\n", s.pad(), "", colAcid, bar(permille, width-6), colPaper, permille/10)
-	fmt.Fprintf(s.out, "%*s\x1b[3%sm%s  ·  %s\x1b[0m\x1b[K\n\n", s.pad(), "", colMuted, label, elapsed(took))
+	fmt.Fprintf(s.out, "%*s%s%s  ·  %s\x1b[0m\x1b[K\n\n", s.pad(), "", sgr(colMuted), label, elapsed(took))
 	fmt.Fprintf(s.out, "%*s\x1b[3%smTip: %s\x1b[0m\x1b[K\n", s.pad(), "", colViolet, tip)
 }
 

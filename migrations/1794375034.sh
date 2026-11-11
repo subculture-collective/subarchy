@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Pult 0.3.0 can theme Subarchy's own shell, lock and Hyprland colours
 # (issue #76). A user who installed with an older Pult has no palette file
 # yet: apply their active theme once more so Pult writes it. Someone who

@@ -226,7 +226,6 @@ func TestScreensInstallEnd(t *testing.T) {
 				t.Error("installer output not silenced under the install view")
 			}
 			os.WriteFile(e.installLog, []byte("old run\n>> finishing\n>> partitioning /dev/vda\n"), 0o644)
-			time.Sleep(700 * time.Millisecond)
 			if fail {
 				return errors.New("exit status 1")
 			}
@@ -333,7 +332,7 @@ func TestInstallViewLayout(t *testing.T) {
 // L during the install switches the log window on.
 func TestInstallViewLogToggle(t *testing.T) {
 	s, _, out := testScreens(t)
-	keys := []byte{0, 'l'}
+	keys := []byte{'l'}
 	s.poll = func() (func() byte, func()) {
 		return func() byte {
 			if len(keys) == 0 {
@@ -348,8 +347,7 @@ func TestInstallViewLogToggle(t *testing.T) {
 	os.WriteFile(log, nil, 0o644)
 	stop := s.progress(log)
 	os.WriteFile(log, []byte(">> partitioning /dev/vda\nsgdisk says hello\n"), 0o644)
-	time.Sleep(900 * time.Millisecond)
-	stop()
+	stop() // draws a last frame, with the log as it now is
 	if !strings.Contains(out.String(), "Press L to hide the log") || !strings.Contains(out.String(), "sgdisk says hello") {
 		t.Errorf("log window not shown after L:\n%s", out.String())
 	}

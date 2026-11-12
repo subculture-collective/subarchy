@@ -261,7 +261,9 @@ func (s *screens) progress(logPath string) (stop func()) {
 		best, showLog := 0, false
 		tick := time.NewTicker(200 * time.Millisecond)
 		defer tick.Stop()
-		for {
+		// One more frame is drawn after stop is called, so the view always
+		// ends on what the log last said, however the frames fell.
+		for last := false; ; {
 			log := ""
 			if data, err := os.ReadFile(logPath); err == nil {
 				if int64(len(data)) < offset {
@@ -279,9 +281,12 @@ func (s *screens) progress(logPath string) (stop func()) {
 			best = at
 			took := time.Since(started)
 			s.drawProgress(at, label, took, tips[int(took.Seconds()/8)%len(tips)], tail(log, logWindow), showLog)
+			if last {
+				return
+			}
 			select {
 			case <-done:
-				return
+				last = true
 			case <-tick.C:
 			}
 		}

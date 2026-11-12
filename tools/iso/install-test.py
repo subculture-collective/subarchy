@@ -199,9 +199,9 @@ def guided(serial: Serial, qmp: Path, timeout: float) -> str:
         ("unlock the disk too", ["n"]),
         ("Disk passphrase>", PASSPHRASE + "\n"),
         ("Confirm>", PASSPHRASE + "\n"),
-        ("Does this look right", ["ret"]),
         ("Install disk", ["ret"]),
         ("Install here", ["ret"]),
+        ("Does this look right", ["ret"]),
         ("Erase /dev/vda and install Subarchy?", ["y"]),
     ]
     for shown, keys in steps:

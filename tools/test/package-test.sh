@@ -29,7 +29,7 @@ for path in usr/bin/subcult usr/bin/sub usr/bin/subcult-app usr/bin/subcult-upda
   usr/share/subcult/default/hypr/subcult.lua usr/share/subcult/default/hypr/user-hyprland.lua \
   usr/share/wayland-sessions/subarchy.desktop usr/lib/sddm/sddm.conf.d/subarchy.conf \
   usr/lib/sysctl.d/90-subarchy-hardening.conf usr/lib/systemd/resolved.conf.d/50-subarchy.conf \
-  usr/lib/NetworkManager/conf.d/50-subarchy-dns.conf usr/lib/systemd/coredump.conf.d/50-subarchy.conf \
+  usr/lib/NetworkManager/conf.d/50-subarchy-dns.conf usr/lib/systemd/coredump.conf.d/50-subarchy.conf usr/lib/systemd/logind.conf.d/50-subarchy-power-key.conf \
   usr/lib/systemd/user/timers.target.wants/subcult-update-check.timer \
   usr/lib/udev/rules.d/90-subarchy-power.rules usr/bin/subcult-power-auto \
   usr/lib/udev/rules.d/70-subarchy-gpu.rules usr/share/uwsm/env-hyprland.d/50-subarchy-gpu \

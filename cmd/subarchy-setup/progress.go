@@ -123,12 +123,40 @@ func centre(text string, width int) string {
 // when switched on, the end of the install log under them.
 func (s *screens) drawProgress(permille int, label string, took time.Duration, tip string, logLines []string, showLog bool) {
 	width, pad := logoWidth(), s.pad()
-	block := len(logoLines()) + 10
-	if showLog {
-		block += logWindow + 2
+	// What fits: on a short screen the log window shrinks, and gives way
+	// to nothing before the mark does only if even three lines will not fit.
+	const below = 10 // the heading, bar, status, tip and hint with their gaps
+	rows, withLogo, logRows := 0, true, 0
+	if s.height != nil {
+		rows = s.height()
 	}
-	fmt.Fprint(s.out, "\x1b[H"+strings.Repeat("\x1b[K\n", s.top(block)))
-	s.drawLogo()
+	block := len(logoLines()) + below
+	if showLog {
+		logRows = logWindow
+		if rows > 0 && block+logRows+2 > rows-1 {
+			logRows = rows - 1 - block - 2
+		}
+		if logRows < 3 {
+			// Not with the mark on screen: the log takes its place.
+			withLogo, block = false, below
+			logRows = logWindow
+			if rows > 0 && block+logRows+2 > rows-1 {
+				logRows = rows - 1 - block - 2
+			}
+			if logRows < 0 {
+				logRows = 0
+			}
+		}
+		block += logRows + 2
+	}
+	top := s.top(block)
+	if rows > 0 && top+block > rows-1 {
+		top = 0 // a full screen: no margin, and never a line too many
+	}
+	fmt.Fprint(s.out, "\x1b[H"+strings.Repeat("\x1b[K\n", top))
+	if withLogo {
+		s.drawLogo()
+	}
 	const heading = "Installing Subarchy"
 	timer := elapsed(took)
 	gap := width - len(heading) - len(timer)
@@ -159,8 +187,11 @@ func (s *screens) drawProgress(permille int, label string, took time.Duration, t
 		if left < 0 {
 			left = 0
 		}
-		fmt.Fprintf(s.out, "\x1b[K\n%*s%s%s\x1b[0m\x1b[K\n", left, "", sgr(colMuted), strings.Repeat("─", wide))
-		for i := 0; i < logWindow; i++ {
+		fmt.Fprintf(s.out, "\x1b[K\n%*s%s%s\x1b[0m\x1b[K\n", left, "", sgr(colMuted), strings.Repeat("-", wide))
+		if len(logLines) > logRows {
+			logLines = logLines[len(logLines)-logRows:]
+		}
+		for i := 0; i < logRows; i++ {
 			l := ""
 			if i < len(logLines) {
 				l = strings.Map(func(r rune) rune {

@@ -34,7 +34,9 @@ gives the prompts below instead.
 The console font follows the screen: before every screen the installer
 reads the framebuffer's width (`/sys/class/graphics/fb0/virtual_size`) and
 sets the largest Terminus font that still leaves 100 columns, which is
-the 32-pixel one from 1600 pixels up.
+the 32-pixel one from 1600 pixels up. It uses the code page 437 set
+(`ter-i32b`): that one has the half blocks and shades the mark is drawn
+with.
 
 On a serial console or over SSH it asks plain line prompts. It asks for the
 keyboard layout first and switches the console to it (`loadkeys`), so the

@@ -601,11 +601,13 @@ func onConsole() bool {
 	return err == nil
 }
 
-// terminus is the Terminus console fonts by glyph width in pixels.
+// terminus is the Terminus console fonts by glyph width in pixels. The
+// "i" set (code page 437) is the one with the half blocks and the dark
+// shade the mark is drawn with; the wider "v" set shows them as "#".
 var terminus = []struct {
 	width int
 	name  string
-}{{16, "ter-v32b"}, {14, "ter-v28b"}, {12, "ter-v24b"}, {11, "ter-v22b"}, {10, "ter-v20b"}, {8, "ter-v16b"}}
+}{{16, "ter-i32b"}, {14, "ter-i28b"}, {12, "ter-i24b"}, {11, "ter-i22b"}, {10, "ter-i20b"}, {8, "ter-i16b"}}
 
 // fontFor picks the largest Terminus font that still leaves 100 columns
 // on a screen that many pixels wide: 32 px tall on a 1920 or 4K panel,

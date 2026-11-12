@@ -153,8 +153,8 @@ func TestScreensEscape(t *testing.T) {
 }
 
 func TestFontFor(t *testing.T) {
-	for pixels, want := range map[int]string{3840: "ter-v32b", 2880: "ter-v32b", 1920: "ter-v32b", 1600: "ter-v32b",
-		1366: "ter-v24b", 1280: "ter-v24b", 1024: "ter-v20b", 800: "ter-v16b", 640: "ter-v16b"} {
+	for pixels, want := range map[int]string{3840: "ter-i32b", 2880: "ter-i32b", 1920: "ter-i32b", 1600: "ter-i32b",
+		1366: "ter-i24b", 1280: "ter-i24b", 1024: "ter-i20b", 800: "ter-i16b", 640: "ter-i16b"} {
 		if _, got := fontFor(pixels); got != want {
 			t.Errorf("fontFor(%d) = %s, want %s", pixels, got, want)
 		}
@@ -304,6 +304,21 @@ func TestInstallViewLayout(t *testing.T) {
 	}
 	if got := tail("a\n\n  \nb\rc\r\nd\n", 2); len(got) != 2 || got[0] != "c\r" && got[0] != "c" || got[1] != "d" {
 		t.Errorf("tail = %q", got)
+	}
+	// On a short screen the log window shrinks to fit under the mark, and
+	// the frame never has more lines than the screen.
+	s.height = func() int { return 33 }
+	out.Reset()
+	s.drawProgress(420, "x", time.Second, "A tip.", strings.Fields(strings.Repeat("logline ", 12)), true)
+	lines = plain()
+	if n := strings.Count(strings.Join(lines, "\n"), "logline"); n != 33-1-20-2 || len(lines)-1 > 32 || !strings.Contains(out.String(), "\x1b[0;32m") {
+		t.Errorf("short screen: %d log lines, %d lines in the frame", n, len(lines))
+	}
+	s.height = func() int { return 24 } // too short for both: the log replaces the mark
+	out.Reset()
+	s.drawProgress(420, "x", time.Second, "A tip.", strings.Fields(strings.Repeat("logline ", 12)), true)
+	if n := strings.Count(out.String(), "logline"); n != 24-1-10-2 || strings.Contains(out.String(), "\x1b[0;32m") || len(plain())-1 > 23 {
+		t.Errorf("very short screen: %d log lines, mark drawn: %v", n, strings.Contains(out.String(), "\x1b[0;32m"))
 	}
 	if centre("ab", 6) != "  ab" || centre("abcdef", 4) != "abcdef" {
 		t.Error("centre")

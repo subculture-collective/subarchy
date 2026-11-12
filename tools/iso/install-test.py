@@ -429,8 +429,8 @@ def boot(disk: Path, vars_file: Path) -> bool:
             # One command from each group of install/packages/cli.txt.
             "cli_tools": serial.run(
                 "for c in curl rsync 7z bat eza rg fzf zoxide jq yq tldr starship atuin btop yazi lazygit lazydocker tmux"
-                " fastfetch gh gt delta yt-dlp ffmpeg magick dust duf codex opencode; do"
-                " command -v $c >/dev/null || echo missing:$c; done; echo CLI_DONE"
+                " fastfetch gh gt tea delta yt-dlp ffmpeg magick dust duf codex opencode; do"
+                " command -v $c >/dev/null || echo missing:$c; done; tea --version >/dev/null 2>&1 || echo missing:tea-runs; echo CLI_DONE"
             ),
             "power_key": serial.run("busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey;"
                                     " busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKeyLongPress"),

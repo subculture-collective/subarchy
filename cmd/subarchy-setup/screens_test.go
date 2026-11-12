@@ -299,6 +299,11 @@ func TestInstallViewLayout(t *testing.T) {
 	lines = plain()
 	find(lines, "Press L to hide the log")
 	find(lines, "line one")
+	if box := find(lines, "line one"); !strings.HasPrefix(strings.TrimLeft(box, " "), "│ line one") || !strings.HasSuffix(box, "│") {
+		t.Errorf("log line not in a box: %q", box)
+	}
+	find(lines, "┌─ install log ─")
+	find(lines, "└─")
 	if strings.Contains(out.String(), "bad\x1b[2J") {
 		t.Error("control bytes from the log reached the screen")
 	}
@@ -311,13 +316,13 @@ func TestInstallViewLayout(t *testing.T) {
 	out.Reset()
 	s.drawProgress(420, "x", time.Second, "A tip.", strings.Fields(strings.Repeat("logline ", 12)), true)
 	lines = plain()
-	if n := strings.Count(strings.Join(lines, "\n"), "logline"); n != 33-1-20-2 || len(lines)-1 > 32 || !strings.Contains(out.String(), "\x1b[0;32m") {
+	if n := strings.Count(strings.Join(lines, "\n"), "logline"); n != 33-1-20-3 || len(lines)-1 > 32 || !strings.Contains(out.String(), "\x1b[0;32m") {
 		t.Errorf("short screen: %d log lines, %d lines in the frame", n, len(lines))
 	}
 	s.height = func() int { return 24 } // too short for both: the log replaces the mark
 	out.Reset()
 	s.drawProgress(420, "x", time.Second, "A tip.", strings.Fields(strings.Repeat("logline ", 12)), true)
-	if n := strings.Count(out.String(), "logline"); n != 24-1-10-2 || strings.Contains(out.String(), "\x1b[0;32m") || len(plain())-1 > 23 {
+	if n := strings.Count(out.String(), "logline"); n != 24-1-10-3 || strings.Contains(out.String(), "\x1b[0;32m") || len(plain())-1 > 23 {
 		t.Errorf("very short screen: %d log lines, mark drawn: %v", n, strings.Contains(out.String(), "\x1b[0;32m"))
 	}
 	if centre("ab", 6) != "  ab" || centre("abcdef", 4) != "abcdef" {

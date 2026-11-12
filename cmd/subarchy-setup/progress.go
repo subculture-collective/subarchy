@@ -108,6 +108,10 @@ func bar(permille, width int) string {
 // the log is switched on.
 const logWindow = 12
 
+// boxLines is what the log box adds around its lines: a gap above it and
+// its top and bottom edges.
+const boxLines = 3
+
 // centre pads text to sit in the middle of a column that wide.
 func centre(text string, width int) string {
 	n := len([]rune(text))
@@ -133,21 +137,21 @@ func (s *screens) drawProgress(permille int, label string, took time.Duration, t
 	block := len(logoLines()) + below
 	if showLog {
 		logRows = logWindow
-		if rows > 0 && block+logRows+2 > rows-1 {
-			logRows = rows - 1 - block - 2
+		if rows > 0 && block+logRows+boxLines > rows-1 {
+			logRows = rows - 1 - block - boxLines
 		}
 		if logRows < 3 {
 			// Not with the mark on screen: the log takes its place.
 			withLogo, block = false, below
 			logRows = logWindow
-			if rows > 0 && block+logRows+2 > rows-1 {
-				logRows = rows - 1 - block - 2
+			if rows > 0 && block+logRows+boxLines > rows-1 {
+				logRows = rows - 1 - block - boxLines
 			}
 			if logRows < 0 {
 				logRows = 0
 			}
 		}
-		block += logRows + 2
+		block += logRows + boxLines
 	}
 	top := s.top(block)
 	if rows > 0 && top+block > rows-1 {
@@ -187,7 +191,12 @@ func (s *screens) drawProgress(permille int, label string, took time.Duration, t
 		if left < 0 {
 			left = 0
 		}
-		fmt.Fprintf(s.out, "\x1b[K\n%*s%s%s\x1b[0m\x1b[K\n", left, "", sgr(colMuted), strings.Repeat("-", wide))
+		// A box with the log's name set into its top edge.
+		inner := wide - 4
+		const name = " install log "
+		edge := sgr(colViolet)
+		fmt.Fprintf(s.out, "\x1b[K\n%*s%s┌─%s%s%s%s┐\x1b[0m\x1b[K\n", left, "", edge, sgr(colMuted), name, edge,
+			strings.Repeat("─", wide-3-len(name)))
 		if len(logLines) > logRows {
 			logLines = logLines[len(logLines)-logRows:]
 		}
@@ -200,12 +209,13 @@ func (s *screens) drawProgress(permille int, label string, took time.Duration, t
 					}
 					return r
 				}, logLines[i])
-				if r := []rune(l); len(r) > wide {
-					l = string(r[:wide])
+				if r := []rune(l); len(r) > inner {
+					l = string(r[:inner])
 				}
 			}
-			fmt.Fprintf(s.out, "%*s%s%s\x1b[0m\x1b[K\n", left, "", sgr(colMuted), l)
+			fmt.Fprintf(s.out, "%*s%s│ %s%-*s %s│\x1b[0m\x1b[K\n", left, "", edge, sgr(colMuted), inner, l, edge)
 		}
+		fmt.Fprintf(s.out, "%*s%s└%s┘\x1b[0m\x1b[K\n", left, "", edge, strings.Repeat("─", wide-2))
 	}
 	fmt.Fprint(s.out, "\x1b[J")
 }

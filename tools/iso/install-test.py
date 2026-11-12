@@ -436,6 +436,11 @@ def boot(disk: Path, vars_file: Path) -> bool:
                 " docker compose version >/dev/null 2>&1 && echo COMPOSE; docker buildx version >/dev/null 2>&1 && echo BUILDX",
                 timeout=120,
             ),
+            # Tailscale (ADR 0058): the daemon runs, nobody is signed in.
+            "tailscale": serial.run(
+                "systemctl is-enabled tailscaled; systemctl is-active tailscaled;"
+                " tailscale status 2>&1 | grep -ci 'logged out'; tailscale version | head -1"
+            ),
             # One command from each group of install/packages/cli.txt.
             "cli_tools": serial.run(
                 "for c in curl rsync 7z bat eza rg fzf zoxide jq yq tldr starship atuin btop yazi lazygit lazydocker tmux"
@@ -769,6 +774,7 @@ finally:
         "sysctl hardening": r["sysctl"].split() == ["2", "1", "1"],
         "docker starts on demand, needs sudo, and is behind ufw": r["docker"].split()
         == ["enabled", "disabled", "inactive", "0", "USER_CANNOT", "SUDO_CAN", "active", "1", "COMPOSE", "BUILDX"],
+        "tailscale is installed and running, signed out": r["tailscale"].split()[:3] == ["enabled", "active", "1"],
         "command-line and terminal apps installed": "CLI_DONE" in r["cli_tools"] and "missing:" not in r["cli_tools"],
         "power button: a short press is left to the session, a long press powers off": r["power_key"].split()
         == ["s", '"ignore"', "s", '"poweroff"'],

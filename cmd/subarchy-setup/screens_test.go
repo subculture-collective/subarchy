@@ -116,7 +116,7 @@ func TestScreensInstall(t *testing.T) {
 			t.Errorf("screens lack %q", want)
 		}
 	}
-	if !strings.Contains(callText(g), "--header Keyboard layout --padding 0 0 0 29 --cursor.foreground 2 --header.foreground 5 --selected.foreground 2 --selected German") {
+	if !strings.Contains(callText(g), "--header Keyboard layout --padding 0 0 0 26 --cursor.foreground 2 --header.foreground 5 --selected.foreground 2 --selected German") {
 		t.Error("choosing German did not preselect the German keyboard")
 	}
 	if !strings.Contains(callText(g), "[vfat EFI, ntfs Windows]") || !strings.Contains(callText(g), "[empty]") {
@@ -251,5 +251,86 @@ func TestScreensInstallEnd(t *testing.T) {
 	if code != 1 || len(did) != 1 || did[0] != "log" || !strings.Contains(out, "installation stopped: exit status 1") ||
 		!strings.Contains(out, "target not found: nope") {
 		t.Errorf("failure: exit %d, did %v:\n%s", code, did, out)
+	}
+}
+
+// The install view: the heading with the timer at the column's right
+// edge, the status and tip centred, and the log window on L.
+func TestInstallViewLayout(t *testing.T) {
+	s, _, out := testScreens(t)
+	s.height = func() int { return 60 }
+	plain := func() []string {
+		text := ansi.ReplaceAllString(out.String(), "")
+		text = strings.NewReplacer("\x1b[K", "", "\x1b[J", "", "\x1b[H", "").Replace(text)
+		return strings.Split(text, "\n")
+	}
+	find := func(lines []string, part string) string {
+		for _, l := range lines {
+			if strings.Contains(l, part) {
+				return l
+			}
+		}
+		t.Fatalf("no line with %q in:\n%s", part, strings.Join(lines, "\n"))
+		return ""
+	}
+	s.poll = func() (func() byte, func()) { return func() byte { return 0 }, func() {} }
+	s.drawProgress(420, "Installing packages (3 of 9)", 75*time.Second, "A tip.", []string{"line one", "line two"}, false)
+	lines := plain()
+	pad, width := s.pad(), logoWidth()
+	heading := find(lines, "Installing Subarchy")
+	if !strings.HasPrefix(heading, strings.Repeat(" ", pad)+"Installing Subarchy") || !strings.HasSuffix(heading, "1m 15s") ||
+		len([]rune(heading)) != pad+width {
+		t.Errorf("heading line = %q (pad %d, width %d)", heading, pad, width)
+	}
+	status := find(lines, "Installing packages (3 of 9)")
+	if left := len(status) - len(strings.TrimLeft(status, " ")); left != pad+(width-len("Installing packages (3 of 9)"))/2 {
+		t.Errorf("status starts at %d: %q", left, status)
+	}
+	find(lines, "Press L to show the log")
+	if strings.Contains(out.String(), "line one") {
+		t.Error("log shown while switched off")
+	}
+	// The mark sits in the middle: as many blank lines above as the rows allow.
+	if blank := s.top(len(logoLines()) + 10); blank != 20 || strings.TrimSpace(strings.Join(lines[:blank], "")) != "" || strings.TrimSpace(lines[blank]) == "" {
+		t.Errorf("mark not centred: top %d", blank)
+	}
+	out.Reset()
+	s.drawProgress(420, "x", time.Second, "A tip.", []string{"line one", "bad\x1b[2Jline"}, true)
+	lines = plain()
+	find(lines, "Press L to hide the log")
+	find(lines, "line one")
+	if strings.Contains(out.String(), "bad\x1b[2J") {
+		t.Error("control bytes from the log reached the screen")
+	}
+	if got := tail("a\n\n  \nb\rc\r\nd\n", 2); len(got) != 2 || got[0] != "c\r" && got[0] != "c" || got[1] != "d" {
+		t.Errorf("tail = %q", got)
+	}
+	if centre("ab", 6) != "  ab" || centre("abcdef", 4) != "abcdef" {
+		t.Error("centre")
+	}
+}
+
+// L during the install switches the log window on.
+func TestInstallViewLogToggle(t *testing.T) {
+	s, _, out := testScreens(t)
+	keys := []byte{0, 'l'}
+	s.poll = func() (func() byte, func()) {
+		return func() byte {
+			if len(keys) == 0 {
+				return 0
+			}
+			k := keys[0]
+			keys = keys[1:]
+			return k
+		}, func() {}
+	}
+	log := filepath.Join(t.TempDir(), "install.log")
+	os.WriteFile(log, nil, 0o644)
+	stop := s.progress(log)
+	os.WriteFile(log, []byte(">> partitioning /dev/vda\nsgdisk says hello\n"), 0o644)
+	time.Sleep(900 * time.Millisecond)
+	stop()
+	if !strings.Contains(out.String(), "Press L to hide the log") || !strings.Contains(out.String(), "sgdisk says hello") {
+		t.Errorf("log window not shown after L:\n%s", out.String())
 	}
 }

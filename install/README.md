@@ -23,8 +23,10 @@ choosing a disk the user can install there, browse it read-only first, or
 pick another. A summary table of every answer, the disk included, then
 asks "Does this look right?", and the erase question comes last; its
 default is no. Escape goes back a step on every screen. While `subarchy-install` runs, the screen shows
-a bar with a percentage, the current phase, the time so far and a rotating
-tip (`progress.go`); the raw output goes to `/var/log/subarchy-install.log`,
+the mark in the middle of the screen, "Installing Subarchy" with the time
+so far at the right, a bar with a percentage, the current phase and a
+rotating tip (`progress.go`). L switches a window with the end of the
+install log on and off; the raw output goes to `/var/log/subarchy-install.log`,
 which is also where the percentage is read from. The finish screen offers
 "Reboot now", and a failure shows the end of the log with a menu. `--plain`
 gives the prompts below instead.

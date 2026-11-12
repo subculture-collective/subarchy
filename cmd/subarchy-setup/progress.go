@@ -104,22 +104,102 @@ func bar(permille, width int) string {
 	return strings.Repeat("█", full) + strings.Repeat("░", width-full)
 }
 
-// draw paints one frame of the install view.
-func (s *screens) drawProgress(permille int, label string, took time.Duration, tip string) {
-	fmt.Fprint(s.out, "\x1b[H\n")
-	for _, l := range strings.Split(strings.TrimRight(logo, "\n"), "\n") {
-		s.line(colAcid, l)
+// logWindow is how many lines of the log the install view shows when
+// the log is switched on.
+const logWindow = 12
+
+// centre pads text to sit in the middle of a column that wide.
+func centre(text string, width int) string {
+	n := len([]rune(text))
+	if n >= width {
+		return text
 	}
-	width := logoWidth()
-	fmt.Fprintf(s.out, "\n%*s\x1b[3%smInstalling Subarchy\x1b[0m\x1b[K\n\n", s.pad(), "", colPaper)
-	fmt.Fprintf(s.out, "%*s\x1b[3%sm%s\x1b[3%sm %3d%%\x1b[0m\x1b[K\n\n", s.pad(), "", colAcid, bar(permille, width-6), colPaper, permille/10)
-	fmt.Fprintf(s.out, "%*s%s%s  ·  %s\x1b[0m\x1b[K\n\n", s.pad(), "", sgr(colMuted), label, elapsed(took))
-	fmt.Fprintf(s.out, "%*s\x1b[3%smTip: %s\x1b[0m\x1b[K\n", s.pad(), "", colViolet, tip)
+	return strings.Repeat(" ", (width-n)/2) + text
+}
+
+// drawProgress paints one frame of the install view, in the middle of
+// the screen: the mark; "Installing Subarchy" with the time so far at
+// the column's right edge; the bar; the status and a tip, centred; and,
+// when switched on, the end of the install log under them.
+func (s *screens) drawProgress(permille int, label string, took time.Duration, tip string, logLines []string, showLog bool) {
+	width, pad := logoWidth(), s.pad()
+	block := len(logoLines()) + 10
+	if showLog {
+		block += logWindow + 2
+	}
+	fmt.Fprint(s.out, "\x1b[H"+strings.Repeat("\x1b[K\n", s.top(block)))
+	s.drawLogo()
+	const heading = "Installing Subarchy"
+	timer := elapsed(took)
+	gap := width - len(heading) - len(timer)
+	if gap < 1 {
+		gap = 1
+	}
+	fmt.Fprintf(s.out, "\x1b[K\n%*s%s%s%*s%s%s\x1b[0m\x1b[K\n\x1b[K\n", pad, "", sgr(colPaper), heading, gap, "", sgr(colMuted), timer)
+	fmt.Fprintf(s.out, "%*s%s%s%s %3d%%\x1b[0m\x1b[K\n\x1b[K\n", pad, "", sgr(colAcid), bar(permille, width-5), sgr(colPaper), permille/10)
+	fmt.Fprintf(s.out, "%*s%s%s\x1b[0m\x1b[K\n\x1b[K\n", pad, "", sgr(colPaper), centre(label, width))
+	fmt.Fprintf(s.out, "%*s%s%s\x1b[0m\x1b[K\n\x1b[K\n", pad, "", sgr(colViolet), centre("Tip: "+tip, width))
+	if s.poll != nil {
+		hint := "Press L to show the log"
+		if showLog {
+			hint = "Press L to hide the log"
+		}
+		fmt.Fprintf(s.out, "%*s%s%s\x1b[0m\x1b[K\n", pad, "", sgr(colMuted), centre(hint, width))
+	}
+	if showLog {
+		// The log is wider than the column: it gets most of the screen.
+		wide := s.width() - 8
+		if wide > 140 {
+			wide = 140
+		}
+		if wide < width {
+			wide = width
+		}
+		left := (s.width() - wide) / 2
+		if left < 0 {
+			left = 0
+		}
+		fmt.Fprintf(s.out, "\x1b[K\n%*s%s%s\x1b[0m\x1b[K\n", left, "", sgr(colMuted), strings.Repeat("─", wide))
+		for i := 0; i < logWindow; i++ {
+			l := ""
+			if i < len(logLines) {
+				l = strings.Map(func(r rune) rune {
+					if r < 0x20 || r == 0x7f {
+						return -1 // control bytes would move the cursor
+					}
+					return r
+				}, logLines[i])
+				if r := []rune(l); len(r) > wide {
+					l = string(r[:wide])
+				}
+			}
+			fmt.Fprintf(s.out, "%*s%s%s\x1b[0m\x1b[K\n", left, "", sgr(colMuted), l)
+		}
+	}
+	fmt.Fprint(s.out, "\x1b[J")
+}
+
+// tail returns the last n lines of the log, without blank ones.
+func tail(log string, n int) []string {
+	var lines []string
+	for _, l := range strings.Split(log, "\n") {
+		// pacman redraws progress with carriage returns; keep the last state.
+		if i := strings.LastIndex(strings.TrimRight(l, "\r"), "\r"); i >= 0 {
+			l = l[i+1:]
+		}
+		if strings.TrimSpace(l) != "" {
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return lines
 }
 
 // progress shows the install view until the returned stop is called. It
 // reads the log from where it stood when the install started, since the
-// log is appended to across runs.
+// log is appended to across runs. L switches the log window on and off.
 func (s *screens) progress(logPath string) (stop func()) {
 	offset := int64(0)
 	if st, err := os.Stat(logPath); err == nil {
@@ -131,10 +211,14 @@ func (s *screens) progress(logPath string) (stop func()) {
 		s.fit()
 	}
 	fmt.Fprint(s.out, "\x1b[2J\x1b[?25l")
+	next, restore := func() byte { return 0 }, func() {}
+	if s.poll != nil {
+		next, restore = s.poll()
+	}
 	go func() {
 		defer close(finished)
-		best := 0
-		tick := time.NewTicker(500 * time.Millisecond)
+		best, showLog := 0, false
+		tick := time.NewTicker(200 * time.Millisecond)
 		defer tick.Stop()
 		for {
 			log := ""
@@ -144,13 +228,16 @@ func (s *screens) progress(logPath string) (stop func()) {
 				}
 				log = string(data[offset:])
 			}
+			if k := next(); k == 'l' || k == 'L' {
+				showLog = !showLog
+			}
 			at, label := progressOf(log)
 			if at < best {
 				at = best // the bar never goes back
 			}
 			best = at
 			took := time.Since(started)
-			s.drawProgress(at, label, took, tips[int(took.Seconds()/8)%len(tips)])
+			s.drawProgress(at, label, took, tips[int(took.Seconds()/8)%len(tips)], tail(log, logWindow), showLog)
 			select {
 			case <-done:
 				return
@@ -161,6 +248,7 @@ func (s *screens) progress(logPath string) (stop func()) {
 	return func() {
 		close(done)
 		<-finished
+		restore()
 		fmt.Fprint(s.out, "\x1b[?25h")
 	}
 }

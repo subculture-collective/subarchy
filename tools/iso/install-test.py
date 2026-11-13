@@ -712,12 +712,15 @@ def boot(disk: Path, vars_file: Path) -> bool:
                 " fastfetch gh gt tea delta yt-dlp ffmpeg magick dust duf codex opencode cliamp ttfx; do"
                 " command -v $c >/dev/null || echo missing:$c; done; tea --version >/dev/null 2>&1 || echo missing:tea-runs; echo CLI_DONE"
             ),
-            # The apps rebuilt in Subarchy's repository and Proton VPN, from
-            # install/packages/desktop.txt. /usr/bin/voxtype is made by the
-            # package's install script, so it also shows that script ran.
+            # The apps rebuilt in Subarchy's repository, Proton VPN and the
+            # app list's repository apps, from install/packages/desktop.txt.
+            # /usr/bin/voxtype is made by the package's install script, so it
+            # also shows that script ran.
             "desktop_apps": serial.run(
                 "for c in voxtype localsend proton-mail pass-cli protonvpn-app protonvpn"
-                " proton-authenticator proton-drive; do command -v $c >/dev/null || echo missing:$c; done; echo APPS_DONE"
+                " proton-authenticator proton-drive dolphin ark chromium signal-desktop halloy obsidian bw"
+                " system-config-printer qalculate-qt okular swayimg grim slurp satty gpu-screen-recorder vlc obs"
+                " kdenlive gimp inkscape glaxnimate qbittorrent; do command -v $c >/dev/null || echo missing:$c; done; echo APPS_DONE"
             ),
             "power_key": serial.run("busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey;"
                                     " busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKeyLongPress"),
@@ -1109,7 +1112,7 @@ finally:
         == ["enabled", "disabled", "inactive", "0", "USER_CANNOT", "SUDO_CAN", "active", "1", "COMPOSE", "BUILDX"],
         "tailscale is installed and running, signed out": r["tailscale"].split()[:3] == ["enabled", "active", "1"],
         "command-line and terminal apps installed": "CLI_DONE" in r["cli_tools"] and "missing:" not in r["cli_tools"],
-        "voxtype, LocalSend and the Proton apps installed": "APPS_DONE" in r["desktop_apps"]
+        "voxtype, LocalSend, the Proton apps and the app list's repository apps installed": "APPS_DONE" in r["desktop_apps"]
         and "missing:" not in r["desktop_apps"],
         "power button: a short press is left to the session, a long press powers off": r["power_key"].split()
         == ["s", '"ignore"', "s", '"poweroff"'],

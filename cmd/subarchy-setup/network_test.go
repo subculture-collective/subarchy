@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,7 @@ type fakeIwd struct {
 	failJoins int      // joins to refuse before one succeeds
 	joins     []string // "device name security passphrase"
 	scans     int
+	ordered   string // GetOrderedNetworks's reply
 }
 
 func newFakeIwd(t *testing.T) *fakeIwd {
@@ -49,21 +51,33 @@ func newFakeIwd(t *testing.T) *fakeIwd {
 	if err := json.Unmarshal([]byte(managedObjects), &reply); err != nil {
 		t.Fatal(err)
 	}
-	return &fakeIwd{t: t, objects: reply.Data[0]}
+	return &fakeIwd{t: t, objects: reply.Data[0], ordered: orderedNetworks}
 }
 
+// addNetwork puts one more network in range, after the others.
+func (f *fakeIwd) addNetwork(path, name, security string, signal int) {
+	text, _ := json.Marshal(name)
+	f.objects[path] = map[string]map[string]variant{iwdService + ".Network": {
+		"Name": {Type: "s", Data: text}, "Type": {Type: "s", Data: json.RawMessage(`"` + security + `"`)},
+		"Connected": {Type: "b", Data: json.RawMessage("false")}}}
+	f.ordered = strings.TrimSuffix(f.ordered, "]]}") + fmt.Sprintf(`,["%s",%d]]]}`, path, signal)
+}
+
+// busctl answers only the exact calls the installer should make: the
+// service, object path, interface and method, with JSON where it is read.
 func (f *fakeIwd) busctl(args ...string) ([]byte, error) {
-	switch args[len(args)-1] {
-	case "GetManagedObjects":
+	const station = "/net/connman/iwd/0/4"
+	switch strings.Join(args, " ") {
+	case "--json=short call net.connman.iwd / org.freedesktop.DBus.ObjectManager GetManagedObjects":
 		data, _ := json.Marshal(map[string]any{"type": "a{oa{sa{sv}}}", "data": []any{f.objects}})
 		return data, nil
-	case "Scan":
+	case "call net.connman.iwd " + station + " net.connman.iwd.Station Scan":
 		f.scans++
 		return nil, nil
-	case "GetOrderedNetworks":
-		return []byte(orderedNetworks), nil
+	case "--json=short call net.connman.iwd " + station + " net.connman.iwd.Station GetOrderedNetworks":
+		return []byte(f.ordered), nil
 	}
-	f.t.Fatalf("unexpected busctl call %v", args)
+	f.t.Fatalf("unexpected busctl call %q", args)
 	return nil, nil
 }
 
@@ -131,6 +145,80 @@ func TestWiFiScanAndNeeded(t *testing.T) {
 	}
 }
 
+// A name with control characters, which could drive the console, is not
+// listed; one that only looks odd is.
+func TestWiFiScanDropsControlNames(t *testing.T) {
+	f := newFakeIwd(t)
+	f.addNetwork("/net/connman/iwd/0/4/1b_open", "\x1b[2J\x1b]P0ff0000", "open", -5000)
+	f.addNetwork("/net/connman/iwd/0/4/9b_open", "csi\u009b2J", "open", -5000)
+	f.addNetwork("/net/connman/iwd/0/4/2d_open", "-=Free WiFi=-", "open", -5000)
+	nets, err := f.wifi(t.TempDir()).scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, n := range nets {
+		names = append(names, n.name)
+	}
+	if want := "Home Net|Uni|Cafe|-=Free WiFi=-"; strings.Join(names, "|") != want {
+		t.Errorf("listed %q, want %q", strings.Join(names, "|"), want)
+	}
+}
+
+// A network whose name starts with "-" is picked like any other: gum gets
+// the rows after "--" and the remembered row as one --selected= argument,
+// so it never reads a name as a flag. Picking it twice (the first join
+// fails) uses --selected.
+func TestScreensNetworkDashName(t *testing.T) {
+	e := testEnv(t)
+	f := newFakeIwd(t)
+	f.addNetwork("/net/connman/iwd/0/4/2d_open", "-=Free WiFi=-", "open", -5000)
+	f.failJoins = 1
+	e.wifi = f.wifi(t.TempDir())
+	s, g, out := testScreens(t, "English (US)", "English (US)", "<row:-=Free>", "<row:-=Free>",
+		"UTC", "pat", "secret-one", "secret-one", "box", "", "<row:/dev/vda>", "Install here", "", "")
+	pickRows(t, s)
+	e.screens = s
+	dir := filepath.Join(t.TempDir(), "conf")
+	var stdout bytes.Buffer
+	if code := run([]string{"--dir", dir, "--dry-run"}, strings.NewReader(""), &stdout, e, nil, nil); code != 0 {
+		t.Fatalf("exit %d:\n%s\n%s", code, stdout.String(), out.String())
+	}
+	if want := "wlan0 -=Free WiFi=- open |wlan0 -=Free WiFi=- open "; strings.Join(f.joins, "|") != want {
+		t.Errorf("joins %q", f.joins)
+	}
+	picks := 0
+	for _, c := range g.calls {
+		if c[0] != "choose" || !strings.Contains(strings.Join(c, " "), "-=Free WiFi=-") {
+			continue
+		}
+		picks++
+		end := len(c)
+		for i, a := range c {
+			if a == "--" {
+				end = i
+				break
+			}
+		}
+		if end == len(c) {
+			t.Fatalf("no -- before the rows: %q", c)
+		}
+		// Before "--", the name is only ever inside --selected=.
+		for _, a := range c[:end] {
+			if strings.HasPrefix(a, "-=") {
+				t.Errorf("a row before --: %q", c)
+			}
+		}
+	}
+	if picks != 2 || !strings.Contains(callText(g), "--selected=-=Free WiFi=-") {
+		t.Errorf("%d network lists; second not opened on the name: %s", picks, callText(g))
+	}
+	conf, _ := os.ReadFile(filepath.Join(dir, "install.conf"))
+	if !strings.Contains(string(conf), "WIFI_SSID=-=Free WiFi=-\n") {
+		t.Errorf("config:\n%s", conf)
+	}
+}
+
 // pickRows lets a scripted gum answer "<row:prefix>" with the first list
 // entry that starts with prefix.
 func pickRows(t *testing.T, s *screens) {
@@ -138,8 +226,8 @@ func pickRows(t *testing.T, s *screens) {
 	s.gum = func(args ...string) (string, int) {
 		out, code := real(args...)
 		if p, ok := strings.CutPrefix(out, "<row:"); ok {
-			for i, a := range args {
-				if strings.HasPrefix(a, strings.TrimSuffix(p, ">")) && (i == 0 || args[i-1] != "--selected") {
+			for _, a := range args {
+				if strings.HasPrefix(a, strings.TrimSuffix(p, ">")) {
 					return a, code
 				}
 			}
@@ -298,6 +386,13 @@ func TestCarryWiFi(t *testing.T) {
 	if note := carryWiFi(&a, w); note != "" || a.WiFiSSID != "Home Net" || a.WiFiPSK != "home-secret-42" {
 		t.Errorf("carried %q %q (%s)", a.WiFiSSID, a.WiFiPSK, note)
 	}
+	// iwd escapes a passphrase as ell does: a backslash doubled, leading
+	// a leading space as \s; blanks after the = are not part of it, and
+	// trailing ones are.
+	os.WriteFile(filepath.Join(dir, "Home Net.psk"), []byte("[Security]\nPassphrase= \\sback\\\\slash end \n"), 0o600)
+	if carryWiFi(&a, w); a.WiFiPSK != ` back\slash end ` {
+		t.Errorf("escaped psk %q", a.WiFiPSK)
+	}
 	// iwd keeps only the derived key when it was given that.
 	os.WriteFile(filepath.Join(dir, "Home Net.psk"), []byte("[Security]\nPreSharedKey="+strings.Repeat("ab", 32)+"\n"), 0o600)
 	if carryWiFi(&a, w); a.WiFiPSK != strings.Repeat("ab", 32) {
@@ -318,6 +413,48 @@ func TestCarryWiFi(t *testing.T) {
 	delete(f.objects["/net/connman/iwd/0/4/43616665_open"], iwdService+".Network")
 	if note := carryWiFi(&a, w); a.WiFiSSID != "" || !strings.Contains(note, "will not join Uni") {
 		t.Errorf("802.1X: %q (%s)", a.WiFiSSID, note)
+	}
+}
+
+// A network joined by hand whose name holds control characters is not
+// carried over, and the note does not print the name.
+func TestCarryWiFiControlName(t *testing.T) {
+	f := newFakeIwd(t)
+	f.addNetwork("/net/connman/iwd/0/4/1b_open", "\x1b[2J", "open", -5000)
+	f.connect("/net/connman/iwd/0/4/1b_open")
+	var a setup.Answers
+	if note := carryWiFi(&a, f.wifi(t.TempDir())); a.WiFiSSID != "" || note == "" || strings.Contains(note, "\x1b") {
+		t.Errorf("carried %q, note %q", a.WiFiSSID, note)
+	}
+}
+
+func TestUnescapeSetting(t *testing.T) {
+	for in, want := range map[string]string{`plain`: "plain", `\stwo`: " two", `a\\b`: `a\b`, `\t\n\r`: "\t\n\r",
+		`bad\q`: "", `end\`: ""} {
+		if got := unescapeSetting(in); got != want {
+			t.Errorf("unescapeSetting(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The page takes only what iwd joins with: 8 to 63 characters, not the
+// 64-digit key.
+func TestValidTyped(t *testing.T) {
+	if validTyped("home-secret-42") != nil || validTyped(strings.Repeat("ab", 32)) == nil || validTyped("short") == nil {
+		t.Error("validTyped")
+	}
+}
+
+func TestIwctlArgs(t *testing.T) {
+	const pass = "home-secret-42"
+	got := iwctlArgs("wlan0", "-=Free WiFi=-", "psk", pass)
+	want := []string{"--passphrase", pass, "--", "station", "wlan0", "connect", "-=Free WiFi=-", "psk"}
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		// Not printed: the passphrase is in the list.
+		t.Errorf("iwctl arguments for a passphrase network are wrong (%d of them)", len(got))
+	}
+	if got := strings.Join(iwctlArgs("wlan0", "Cafe", "open", ""), " "); got != "-- station wlan0 connect Cafe open" {
+		t.Errorf("open network: %q", got)
 	}
 }
 

@@ -168,9 +168,12 @@ func (s *screens) choose(header string, options []string, selected string) (stri
 	if selected != "" {
 		// gum splits --selected on commas and drops a backslash in front of
 		// any character, so a comma or backslash in the row is escaped.
-		args = append(args, "--selected", strings.NewReplacer(`\`, `\\`, ",", `\,`).Replace(selected))
+		// One argument, so a row that starts with "-" is not read as a flag.
+		args = append(args, "--selected="+strings.NewReplacer(`\`, `\\`, ",", `\,`).Replace(selected))
 	}
-	out, code := s.gum(append(args, options...)...)
+	// After "--" no row is read as a flag, not even a Wi-Fi network named
+	// "-=Free WiFi=-".
+	out, code := s.gum(append(append(args, "--"), options...)...)
 	if code != 0 || out == "" {
 		return "", errBack
 	}
@@ -377,7 +380,11 @@ func collectScreens(s *screens, e env, repo, cmdlineExtra string) (setup.Answers
 		func() error { return s.network(e.wifi) },
 		func() error { return s.account(&a, e, &separate) },
 		func() error { return s.disk(&a, e, disks) },
-		func() error { return s.summary(a, separate, carryWiFi(&a, e.wifi)) },
+		func() error {
+			// Two statements, so the summary sees what carryWiFi put in a.
+			note := carryWiFi(&a, e.wifi)
+			return s.summary(a, separate, note)
+		},
 		func() error { return s.erase(a) },
 	}
 	for i, step := 0, 1; i < len(steps); {

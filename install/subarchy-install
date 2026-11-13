@@ -107,6 +107,8 @@ write_wifi_connection() {
     id=Wi-Fi
   fi
   name=${ssid//[^A-Za-z0-9_.-]/_}
+  # NetworkManager skips a file whose name starts with a dot.
+  [[ $name != .* ]] || name=_${name:1}
   if [[ -n ${conf[WIFI_PSK_FILE]} ]]; then
     security=$'\n[wifi-security]\nkey-mgmt=wpa-psk\npsk='$(keyfile_value "$(<"${conf[WIFI_PSK_FILE]}")")$'\n'
   fi

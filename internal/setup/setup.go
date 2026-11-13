@@ -13,6 +13,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // MinDiskBytes is the smallest disk offered: the 4 GiB ESP plus room for
@@ -86,13 +88,15 @@ func ValidWiFiPassphrase(s string) error {
 }
 
 // ValidSSID reports whether a network name can go into the install config
-// on one line: 1 to 32 bytes and no control characters.
+// on one line and be shown on the console: 1 to 32 bytes of UTF-8 and no
+// control characters, not even C1 ones such as U+009B, which the Linux
+// console reads as the start of an escape sequence.
 func ValidSSID(s string) bool {
-	if len(s) < 1 || len(s) > 32 {
+	if len(s) < 1 || len(s) > 32 || !utf8.ValidString(s) {
 		return false
 	}
-	for _, c := range []byte(s) {
-		if c < 0x20 || c == 0x7f {
+	for _, r := range s {
+		if unicode.IsControl(r) {
 			return false
 		}
 	}

@@ -199,7 +199,7 @@ func TestValidWiFi(t *testing.T) {
 		}
 	}
 	for ssid, want := range map[string]bool{"Home": true, " spaced ": true, "Кафе": true, "": false,
-		strings.Repeat("n", 33): false, "line\nbreak": false} {
+		strings.Repeat("n", 33): false, "line\nbreak": false, "\x1b[2Jclear": false, "csi\u009b2J": false, "bad\xffbyte": false} {
 		if ValidSSID(ssid) != want {
 			t.Errorf("ValidSSID(%q) = %v", ssid, !want)
 		}

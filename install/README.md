@@ -40,15 +40,21 @@ wired machine, or one with no Wi-Fi card, goes straight on. The page
 lists the networks iwd sees, strongest first, with "Look for networks
 again" and "Skip, install offline" below them. For a password network it
 asks the passphrase as a hidden input, joins with `iwctl`, and waits up to
-20 seconds for an address. 802.1X and WEP networks are listed, but the
-installer will not join them. iwd's state is read over D-Bus (`busctl
---json=short`), not from `iwctl`'s table. Skipping is safe: the install
-runs from the image's repository.
+20 seconds for an address. The passphrase has 8 to 63 characters; the
+64-digit key is refused there, because iwd joins only with the passphrase.
+802.1X and WEP networks are listed, but the installer will not join them.
+A network whose name holds control characters is not listed, since any
+access point nearby picks its name and could otherwise send escape
+sequences to the console. Names are passed to gum and `iwctl` after `--`,
+so one starting with `-` is not read as an option. iwd's state is read
+over D-Bus (`busctl --json=short`), not from `iwctl`'s table. Skipping is
+safe: the install runs from the image's repository.
 
 Whatever Wi-Fi network the live session is on when the questions end,
 joined on this page or by hand with `iwctl` before the installer started,
 goes to the installed system. The summary lists it. The passphrase is the
-one typed on the page, or else what iwd saved in `/var/lib/iwd`. It goes
+one typed on the page, or else what iwd saved in `/var/lib/iwd`, with
+iwd's escapes (`\s`, `\\` and the rest) undone. It goes
 to `subarchy-install` like the other secrets: `WIFI_SSID` in the config
 and the passphrase in a mode-600 file named by `WIFI_PSK_FILE`. The
 installer writes
@@ -110,7 +116,7 @@ What it builds:
 | Boot | Limine with its own firmware entry and the `EFI/BOOT` fallback; menu from `/etc/default/limine` | 0007 |
 | Snapshots | snapper config `root` for `@`, 5 numbered, no timeline; `limine-snapper-sync` adds a boot entry per snapshot | 0011 |
 | System | zram swap, NetworkManager, timesyncd, user in `wheel` with zsh, root locked | 0014, 0016 |
-| Wi-Fi | with `WIFI_SSID` set, a NetworkManager connection for that network, mode 600, with the passphrase from `WIFI_PSK_FILE` (none for an open network); a name that is not plain letters, digits, `_ . -` and inner spaces is written as its bytes | 0016 |
+| Wi-Fi | with `WIFI_SSID` set, a NetworkManager connection for that network, mode 600, with the passphrase from `WIFI_PSK_FILE` (none for an open network); a name that is not plain letters, digits, `_ . -` and inner spaces is written as its bytes; the file name never starts with a dot, which NetworkManager would skip; `key-mgmt=wpa-psk`, which NetworkManager also uses for WPA3 (SAE) when the Wi-Fi card supports it | 0016 |
 | Containers | Docker with compose and buildx; `docker.socket` enabled so the daemon starts on demand; the user is not in the `docker` group (`sudo subcult docker sudoless` grants it behind a warning); `ufw-docker` rules added at first boot by `subcult-ufw-docker.service` | 0055, 0019 |
 | Tailscale | `tailscale` installed, `tailscaled` enabled; nobody is signed in until the user runs `sudo tailscale up` | 0058 |
 | Shell setup | the user's `~/.zshrc` and `~/.bashrc` source `/usr/share/subcult/default/shell/zshrc` and `bashrc`: aliases, functions, starship with Subarchy's prompt, atuin (Ctrl-R), zoxide, fzf keys, mise | 0041 |

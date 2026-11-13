@@ -141,6 +141,12 @@ if ! grep -qxF "id=Wi-Fi" "$keyfile" || grep -q wifi-security "$keyfile"; then f
 conf[WIFI_SSID]=12345
 write_wifi_connection >/dev/null
 grep -qxF "ssid=49;50;51;52;53;" "$target/etc/NetworkManager/system-connections/12345.nmconnection" || fail "a digits-only SSID was written as text"
+# NetworkManager skips hidden files, so a name starting with a dot is not
+# written as one.
+conf[WIFI_SSID]=.hidden
+write_wifi_connection >/dev/null
+[[ -f $target/etc/NetworkManager/system-connections/_hidden.nmconnection ]] ||
+  fail "a dot SSID's keyfile: $(ls -A "$target/etc/NetworkManager/system-connections")"
 rm -rf -- "$target"
 conf[WIFI_SSID]=""
 write_wifi_connection

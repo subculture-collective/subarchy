@@ -189,7 +189,9 @@ func (w *wifi) scan() ([]wifiNetwork, error) {
 		if len(pair) != 2 || json.Unmarshal(pair[0], &p) != nil || json.Unmarshal(pair[1], &signal) != nil {
 			continue
 		}
-		if n, ok := network(objs, p); ok && n.name != "" {
+		// Any access point nearby picks its name; one with control
+		// characters could drive the console, so it is not listed.
+		if n, ok := network(objs, p); ok && setup.ValidSSID(n.name) {
 			n.signal = signal
 			nets = append(nets, n)
 		}
@@ -258,8 +260,10 @@ func (w *wifi) secret(n wifiNetwork) (string, error) {
 	keys := map[string]string{}
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
+		// As ell reads it: blanks after the = are dropped, and the rest of
+		// the line is the value, escaped.
 		if k, v, ok := strings.Cut(sc.Text(), "="); ok {
-			keys[strings.TrimSpace(k)] = strings.TrimSpace(v)
+			keys[strings.TrimSpace(k)] = unescapeSetting(strings.TrimLeft(v, " \t"))
 		}
 	}
 	for _, k := range []string{"Passphrase", "PreSharedKey"} {
@@ -268,6 +272,28 @@ func (w *wifi) secret(n wifiNetwork) (string, error) {
 		}
 	}
 	return "", errors.New("no key in iwd's file")
+}
+
+// unescapeSetting undoes ell's escapes in a settings value: \s, \t, \n,
+// \r and \\. A value with any other escape is not one iwd wrote; it
+// comes back empty.
+func unescapeSetting(v string) string {
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		if v[i] != '\\' {
+			b.WriteByte(v[i])
+			continue
+		}
+		if i++; i == len(v) {
+			return ""
+		}
+		c, ok := map[byte]byte{'s': ' ', 't': '\t', 'n': '\n', 'r': '\r', '\\': '\\'}[v[i]]
+		if !ok {
+			return ""
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
 }
 
 // carryWiFi puts the Wi-Fi network the live session is on into the
@@ -282,7 +308,11 @@ func carryWiFi(a *setup.Answers, w *wifi) string {
 	if !ok {
 		return ""
 	}
-	if !n.supported() || !setup.ValidSSID(n.name) {
+	if !setup.ValidSSID(n.name) {
+		// Not printed: the name may hold control characters.
+		return "The installed system will not join this Wi-Fi network by itself; join it from the network menu."
+	}
+	if !n.supported() {
 		return fmt.Sprintf("The installed system will not join %s by itself; join it from the network menu.", n.name)
 	}
 	if n.security == "psk" {
@@ -307,6 +337,16 @@ var networkBody = []string{
 	"No wired or Wi-Fi connection is up. Pick a Wi-Fi network to join, or skip:",
 	"everything the install needs is on this medium. The installed system joins",
 	"the network you pick here.",
+}
+
+// validTyped checks a passphrase typed on the page. The 64-digit key,
+// which NetworkManager also takes, is refused here: iwd joins only with
+// the passphrase itself.
+func validTyped(passphrase string) error {
+	if len(passphrase) > 63 {
+		return errors.New("a Wi-Fi passphrase has 8 to 63 characters")
+	}
+	return setup.ValidWiFiPassphrase(passphrase)
 }
 
 // unsupported is why the installer will not join a network.
@@ -365,7 +405,7 @@ func (s *screens) network(w *wifi) error {
 				if passphrase, err = s.input("Passphrase", "The network's password", "", true); err != nil {
 					break
 				}
-				if err = setup.ValidWiFiPassphrase(passphrase); err != nil {
+				if err = validTyped(passphrase); err != nil {
 					s.notice(capital(err.Error()))
 					continue
 				}
@@ -442,7 +482,7 @@ func (p *prompter) network(w *wifi) error {
 			if err != nil {
 				return err
 			}
-			if err := setup.ValidWiFiPassphrase(passphrase); err != nil {
+			if err := validTyped(passphrase); err != nil {
 				fmt.Fprintf(p.out, "  %v\n", err)
 				continue
 			}
@@ -490,6 +530,20 @@ func hasDefaultRoute(route, ipv6Route string) bool {
 	return false
 }
 
+// iwctlArgs is iwctl's command line to join a network. The passphrase is
+// on it, so it shows in /proc/<pid>/cmdline while iwctl runs; iwctl takes
+// it no other way without a prompt of its own. The live session runs
+// nothing else that could read it.
+func iwctlArgs(device, name, security, passphrase string) []string {
+	var args []string
+	if passphrase != "" {
+		args = append(args, "--passphrase", passphrase)
+	}
+	// iwctl reads options with GNU getopt, which looks for them among all
+	// the arguments; after "--" a name such as "-=Free WiFi=-" is not one.
+	return append(args, "--", "station", device, "connect", name, security)
+}
+
 func realWiFi() *wifi {
 	return &wifi{
 		busctl: func(args ...string) ([]byte, error) {
@@ -498,12 +552,8 @@ func realWiFi() *wifi {
 		join: func(device, name, security, passphrase string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
-			var args []string
-			if passphrase != "" {
-				args = append(args, "--passphrase", passphrase)
-			}
 			// iwctl's own messages are not shown or logged.
-			return exec.CommandContext(ctx, "iwctl", append(args, "station", device, "connect", name, security)...).Run()
+			return exec.CommandContext(ctx, "iwctl", iwctlArgs(device, name, security, passphrase)...).Run()
 		},
 		online: func() bool { return hasDefaultRoute("/proc/net/route", "/proc/net/ipv6_route") },
 		dir:    "/var/lib/iwd",

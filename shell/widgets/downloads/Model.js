@@ -28,12 +28,11 @@ function progress(line) {
 }
 
 // The file a finished download landed in, from `--print after_move:filepath`
-// (a line that is a path) or yt-dlp's "has already been downloaded".
+// (a line that is a path), which yt-dlp also prints for a file it already
+// had. Its "has already been downloaded" note goes to stderr under the quiet
+// mode --print implies, so stdout never carries it.
 function finishedPath(line) {
   const s = String(line || "").trim()
-  const already = /^\[download\]\s+(.+?) has already been downloaded/.exec(s)
-  if (already)
-    return already[1]
   return s.startsWith("/") ? s : ""
 }
 
@@ -58,10 +57,6 @@ function expandHome(path, home) {
 // Queue entries are { url, status, percent, ... }. The next one to run.
 function nextQueued(jobs) {
   return (jobs || []).find(j => j.status === "queued") || null
-}
-
-function active(jobs) {
-  return (jobs || []).some(j => j.status === "queued" || j.status === "running")
 }
 
 function fileName(path) {

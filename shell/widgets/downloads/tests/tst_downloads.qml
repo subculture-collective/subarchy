@@ -26,7 +26,6 @@ TestCase {
 
   function test_finishedPath() {
     compare(Model.finishedPath("/home/u/Downloads/Clip [abc].mp4"), "/home/u/Downloads/Clip [abc].mp4")
-    compare(Model.finishedPath("[download] /home/u/Downloads/Clip [abc].mp4 has already been downloaded"), "/home/u/Downloads/Clip [abc].mp4")
     compare(Model.finishedPath("[download] Destination: x"), "")
   }
 
@@ -45,8 +44,6 @@ TestCase {
   function test_queue() {
     const jobs = [{ url: "a", status: "done" }, { url: "b", status: "running" }, { url: "c", status: "queued" }]
     compare(Model.nextQueued(jobs).url, "c")
-    verify(Model.active(jobs))
-    verify(!Model.active([{ url: "a", status: "done" }, { url: "b", status: "failed" }]))
     compare(Model.nextQueued([]), null)
     compare(Model.expandHome("~/Downloads", "/home/u"), "/home/u/Downloads")
     compare(Model.expandHome("/tmp", "/home/u"), "/tmp")

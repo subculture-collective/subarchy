@@ -69,6 +69,7 @@ Singleton {
 
   function stop() {
     root.pendingUrl = ""
+    root.pendingId = ""
     connectTimer.stop()
     ipc.connected = false
     if (mpv.running) {

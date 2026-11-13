@@ -33,6 +33,10 @@ Singleton {
   // A save asked for before the history file was first read: it waits for
   // that read, so it cannot write a short history over the saved one.
   property bool saveAfterLoad: false
+  // A clear or mark-all-read made before that read: applied to the saved
+  // records once they arrive.
+  property bool clearedEarly: false
+  property bool readEarly: false
   // Popup entries by notification id.
   property var entries: ({})
   readonly property int unread: Model.unread(history)
@@ -157,11 +161,15 @@ Singleton {
 
   function markAllRead() {
     root.history = Model.markAllRead(root.history)
+    if (!historyFile.settled)
+      root.readEarly = true
     save()
   }
 
   function clearHistory() {
     root.history = []
+    if (!historyFile.settled)
+      root.clearedEarly = true
     save()
   }
 
@@ -215,10 +223,10 @@ Singleton {
     onChanged: (live) => {
       if (live)
         return
-      let restored = Model.restore(text, root.cap)
-      for (let i = root.history.length - 1; i >= 0; i--)
-        restored = Model.push(restored, root.history[i], root.cap)
-      root.history = restored
+      root.history = Model.mergeEarly(Model.restore(text, root.cap), root.history, root.cap,
+        root.clearedEarly, root.readEarly)
+      root.clearedEarly = false
+      root.readEarly = false
       if (root.saveAfterLoad) {
         root.saveAfterLoad = false
         root.save()

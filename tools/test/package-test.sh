@@ -150,12 +150,15 @@ grep -q '<annotate key="org.freedesktop.policykit.exec.path">/usr/lib/subcult/ta
   fail "the Tailscale polkit action does not name its helper"
 { grep -q '<allow_active>yes</allow_active>' "$ts_policy" && grep -q '<allow_any>auth_admin</allow_any>' "$ts_policy"; } ||
   fail "the Tailscale polkit action's defaults"
-grep -qx 'ExecStart=/usr/lib/subcult/taildrop-receive %I' "$work/root/usr/lib/systemd/system/subcult-taildrop@.service" ||
-  fail "subcult-taildrop@.service does not run the receiver"
+td_unit=$work/root/usr/lib/systemd/system/subcult-taildrop@.service
+grep -qx 'ExecStart=/usr/lib/subcult/taildrop-receive %I' "$td_unit" || fail "subcult-taildrop@.service does not run the receiver"
+# It starts whenever tailscaled does, and keeps only the rights to become the user.
+grep -qx 'WantedBy=tailscaled.service' "$td_unit" || fail "subcult-taildrop@.service is not wanted by tailscaled"
+grep -qx 'CapabilityBoundingSet=CAP_SETUID CAP_SETGID' "$td_unit" || fail "subcult-taildrop@.service keeps every capability"
 # No user unit receives Taildrop files any more, and nothing grants
 # tailscaled's operator role.
 [[ ! -e $work/root/usr/lib/systemd/user/subcult-tailscale-receive.service ]] || fail "the old user receiver is packaged"
-if grep -rlE 'set[^|;]*--operator' "$work/root/usr/lib/subcult" "$work/root/usr/lib/systemd" "$work/root/usr/bin" \
+if grep -rlE -- '--operator(=|[[:space:]]|$)' "$work/root/usr/lib/subcult" "$work/root/usr/lib/systemd" "$work/root/usr/bin" \
   "$work/root/usr/share/subcult/migrations" 2>/dev/null; then
   fail "a packaged file sets tailscaled's operator"
 fi

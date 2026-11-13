@@ -5,7 +5,9 @@
 # Receive (/usr/lib/subcult/taildrop-receive, root): files tailscale
 # delivers into root's staging folder reach the user's Downloads through
 # setpriv as that user, under free names (a taken name gets -1), and each
-# is announced; a finished get an earlier run left is delivered first while
+# is announced (a link to nowhere also takes a name, and a long name is
+# shortened to fit its number; a file that cannot be saved is announced as
+# such); a finished get an earlier run left is delivered first while
 # an unfinished one is dropped unannounced; a failed get delivers nothing; a
 # removed Downloads is made again; a refusal (signed out) fails --once.
 #
@@ -123,6 +125,28 @@ rm "$work/signed-out"
 # The user's side refuses a name with a folder in it.
 if "$root/tools/tailscale/taildrop-receive.sh" --deliver ../escape </dev/null 2>/dev/null; then fail "--deliver took a name with a folder"; fi
 [[ ! -e $work/home/escape ]] || fail "--deliver wrote outside Downloads"
+
+# A link to nowhere takes its name; a long taken name is shortened to fit
+# 255 bytes with its number, in whole characters.
+deliver() { "$root/tools/tailscale/taildrop-receive.sh" --deliver "$1"; }
+ln -s "$work/nowhere" "$dl/dangling.txt"
+printf 'd' | deliver dangling.txt || fail "--deliver failed on a name a dangling link takes"
+[[ -L $dl/dangling.txt && $(<"$dl/dangling-1.txt") == d ]] || fail "dangling link: $(ls -A "$dl")"
+long="$(printf 'é%.0s' {1..125})a.txt"
+: >"$dl/$long"
+printf 'l' | deliver "$long" || fail "--deliver failed on a long taken name"
+short=$(find "$dl" -name '*-1.txt' ! -name 'dangling-1.txt' -printf '%f\n')
+[[ $(LC_ALL=C; echo "${#short}") -le 255 && $short == "$(printf 'é%.0s' {1..124})-1.txt" ]] ||
+  fail "long name: $short"
+iconv -f UTF-8 -t UTF-8 <<<"$short" >/dev/null || fail "a shortened name is not UTF-8: $short"
+# A file that cannot be saved fails and says so.
+: >"$work/notes"
+chmod 0500 "$dl"
+if printf 'x' | deliver blocked.txt 2>/dev/null; then fail "--deliver succeeded into a read-only Downloads"; fi
+chmod 0700 "$dl"
+grep -qx 'Could not save blocked.txt | Taildrop will try again when the next file arrives' "$work/notes" ||
+  fail "failure announcement: $(cat "$work/notes")"
+rm -rf "${dl:?}"/* "$dl"/.taildrop-* 2>/dev/null || true
 
 # Send through the picker, to a machine by name.
 export SUBCULT_FILE_CHOOSER=$work/chooser SUBCULT_TAILSCALE_HELPER=/usr/lib/subcult/tailscale-helper

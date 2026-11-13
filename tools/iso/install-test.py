@@ -711,12 +711,14 @@ def boot(disk: Path, vars_file: Path) -> bool:
             # change nothing anyway), and the panel goes through the root
             # helper its polkit action names, without a password in the
             # active session only. Taildrop arrives through a system unit
-            # for the installed user, which waits while signed out.
+            # for the installed user, which waits while signed out and is
+            # wanted by tailscaled, so it starts whenever tailscaled does.
             "tailscale_helper": serial.run(
                 f"{sudo} tailscale debug prefs | grep -cE '\"OperatorUser\": \"[^\"]+\"';"
                 " tailscale down >/dev/null 2>&1 && echo USER_CONTROLS || echo USER_DENIED;"
                 " pkaction --verbose --action-id tv.subcult.tailscale | grep -E 'implicit (any|active)|exec.path' | tr -s ' ';"
                 " test -x /usr/lib/subcult/tailscale-helper && echo HELPER;"
+                f" test -L /etc/systemd/system/tailscaled.service.wants/subcult-taildrop@{USER}.service && echo WANTED;"
                 f" systemctl is-enabled subcult-taildrop@{USER}.service; systemctl is-active subcult-taildrop@{USER}.service"
             ),
             # lazydocker through polkit (ADR 0055): the action names the
@@ -1455,7 +1457,7 @@ def tailscale_helper_ok(out: str) -> bool:
             and "implicit any: auth_admin" in out
             and "implicit active: yes" in out
             and "org.freedesktop.policykit.exec.path -> /usr/lib/subcult/tailscale-helper" in out
-            and words[-3:] == ["HELPER", "enabled", "active"])
+            and words[-4:] == ["HELPER", "WANTED", "enabled", "active"])
 
 
 def theme_system_ok(out: str) -> bool:

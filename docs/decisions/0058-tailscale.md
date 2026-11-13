@@ -79,11 +79,20 @@ pause during captive portal sign-in.
   stops, so the browser completes the sign-in there (not yet tried with a
   real account). The panel opens the link and reads
   the status every three seconds, for ten minutes at most, until it shows
-  the machine connected. Plain `up`: any flag would make it check every
-  setting against its default again. An exit node picked in the panel
-  keeps the local network reachable (`--exit-node-allow-lan-access=true`),
-  and the panel addresses a machine by its Tailscale address for the exit
-  node and for Taildrop.
+  the machine connected. Signed in, the helper runs plain `up`: any flag
+  would make it check every setting against its default again. An exit
+  node picked in the panel keeps the local network reachable
+  (`--exit-node-allow-lan-access=true`); stopping it puts both settings
+  back. The panel addresses a machine by its Tailscale address for the
+  exit node and for Taildrop. Signed out after an earlier sign-in (a
+  sign-out or an expired sign-in), `tailscale up` refuses to run without
+  every setting that differs from its default, so `up` and `login` read
+  `tailscale debug prefs` and repeat the exit node and the local-network
+  setting; without that, an exit node picked earlier made sign-in fail
+  until someone ran `tailscale up` with sudo. When tailscaled no longer
+  knows the exit node's address, the helper drops both settings, as
+  `tailscale up` would drop the exit node anyway. Found in review of PR
+  #157 and checked with tailscale 1.104.7 in a container.
 - 2026-11-13: Taildrop receive. The Decision's "small user service" became
   a system one, since `tailscale file get` needs root:
   `subcult-taildrop@<user>.service`, enabled by the installer for the
@@ -103,7 +112,17 @@ pause during captive portal sign-in.
   then waits in `tailscale wait`, which returns once tailscaled is
   connected, and tries again a minute later. "Runs only while signed in"
   became "sleeps while signed out". Only the installed account receives
-  files: tailscaled has one inbox per machine.
+  files: tailscaled has one inbox per machine. The unit is wanted by
+  `tailscaled.service`, so it starts whenever tailscaled does, also when
+  an administrator starts tailscaled again after stopping it. It keeps only
+  the capabilities to become the user (`CAP_SETUID`, `CAP_SETGID`), with
+  `NoNewPrivileges` and a read-only `/usr` and `/etc`; checked under
+  systemd in a container, including a `~/Downloads` that links to `/etc`.
+  A name in `~/Downloads` taken by a link that points nowhere counts as
+  taken, and a numbered name is shortened to fit 255 bytes. A file that
+  cannot be saved is announced ("Could not save ...") and stays in the
+  staging folder until the next file arrives; nothing removes old files
+  there, since they are the user's.
 - Still open: the exit-node pause during captive portal sign-in
   ([[0020-dns|ADR 0020]]) and whether ufw needs a `tailscale0` rule.
 

@@ -19,24 +19,38 @@ set -euo pipefail
 
 # claim STAGED NAME: hard-link STAGED to a free name in $dir based on NAME,
 # then drop STAGED. link(2) fails on a taken name, so nothing is overwritten
-# even when another program writes to Downloads at the same time. Prints
-# the path it took.
+# even when another program writes to Downloads at the same time. A link
+# that points nowhere also takes its name. A numbered name is shortened, in
+# whole characters, to stay within 255 bytes. Prints the path it took.
 claim() {
   local staged=$1 name=$2 base ext target i
   base=${name%.*}
   ext=${name:${#base}}
   [[ -n $base ]] || { base=$name ext=; }
   for ((i = 0; i < 1000; i++)); do
-    target=$dir/$name
-    ((i == 0)) || target=$dir/$base-$i$ext
-    if ln -- "$staged" "$target" 2>/dev/null; then
+    target=$name
+    if ((i)); then
+      while ! fits "$base-$i$ext"; do
+        if [[ -n $base ]]; then base=$(shorten "$base"); else base=$name ext=; fi
+      done
+      target=$base-$i$ext
+    fi
+    if ln -- "$staged" "$dir/$target" 2>/dev/null; then
       rm -f -- "$staged"
-      printf '%s\n' "$target"
+      printf '%s\n' "$dir/$target"
       return 0
     fi
-    [[ -e $target ]] || return 1
+    [[ -e $dir/$target || -L $dir/$target ]] || return 1
   done
   return 1
+}
+fits() {
+  local LC_ALL=C
+  ((${#1} <= 255))
+}
+shorten() {
+  local LC_ALL=C.UTF-8
+  printf '%s' "${1%?}"
 }
 
 # The user's side: copy standard input to a hidden file in Downloads, then
@@ -45,12 +59,16 @@ if [[ ${1:-} == --deliver ]]; then
   name=${2:?usage: taildrop-receive --deliver NAME}
   [[ $name != */* && $name != . && $name != .. ]] || { echo "taildrop-receive: bad name: $name" >&2; exit 1; }
   dir=$HOME/Downloads
-  mkdir -p -- "$dir"
-  tmp=$(mktemp -- "$dir/.taildrop-XXXXXX")
+  tmp=
   trap 'rm -f -- "$tmp"' EXIT
-  cat >"$tmp"
-  chmod 0644 -- "$tmp"
-  target=$(claim "$tmp" "$name")
+  # A file that cannot be saved stays with root and comes again with the
+  # next file received; the user hears about it each time.
+  if ! { mkdir -p -- "$dir" && tmp=$(mktemp -- "$dir/.taildrop-XXXXXX") && cat >"$tmp" &&
+    chmod 0644 -- "$tmp" && target=$(claim "$tmp" "$name"); }; then
+    notify-send -a Taildrop -u critical -i dialog-error -- "Could not save $name" \
+      "Taildrop will try again when the next file arrives" 2>/dev/null || true
+    exit 1
+  fi
   notify-send -a Taildrop -i folder-download -- "Received ${target##*/}" "Saved to ~/Downloads" 2>/dev/null || true
   exit 0
 fi

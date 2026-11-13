@@ -79,8 +79,10 @@ ln -s "$(command -v systemd-escape)" "$work/notail/systemd-escape"
 USER=alice PATH="$work/notail" /bin/bash -euo pipefail "$migration" || fail "the migration failed without tailscale"
 [[ -z $(calls) ]] || fail "without tailscale: $(calls)"
 
-# Nothing in Subarchy makes an account tailscaled's operator (ADR 0062).
-if git -C "$root" grep -nE -- 'set[^|;]*--operator' -- ':!docs' ':!tools/test/migration-taildrop-test.sh' ':!shell/widgets/tailscale/tests'; then
+# Nothing in Subarchy makes an account tailscaled's operator (ADR 0062):
+# no operator flag for `tailscale set`, `up` or `login`, in any position.
+if git -C "$root" grep -nE -- '--operator(=|[[:space:]]|$)' -- ':!docs' ':!tools/test/tailscale-helper-test.sh' \
+  ':!shell/widgets/tailscale/tests'; then
   fail "something sets tailscaled's operator"
 fi
 echo "migration-taildrop-test: ok"

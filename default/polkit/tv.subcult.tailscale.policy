@@ -6,8 +6,10 @@
      helper, which runs only `tailscale up`, `down`, the sign-in, the exit
      node and a Taildrop send, with fixed flags. No account is tailscaled's
      operator, so the other settings (Tailscale SSH among them) still need
-     root. These are network changes, which ADR 0062 lets the active session
-     make without a password, as NetworkManager does. -->
+     root; only before the first sign-in does a sign-in put them back to
+     their defaults (ADR 0062). These are network changes, which ADR 0062
+     lets the active session make without a password, as NetworkManager
+     does. -->
 <policyconfig>
   <vendor>Subarchy</vendor>
   <vendor_url>https://git.subcult.tv/subculture-collective/subarchy</vendor_url>

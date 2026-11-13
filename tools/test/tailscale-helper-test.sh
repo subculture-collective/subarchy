@@ -3,7 +3,10 @@
 # ADR 0062), with a stand-in for tailscale. It runs up, down, the sign-in,
 # the exit node and a Taildrop send with fixed flags, takes only Tailscale
 # addresses and plain file names, refuses everything else without calling
-# tailscale, and stops waiting at the sign-in link. The polkit action names
+# tailscale, and stops waiting at the sign-in link. Signed out after an
+# earlier sign-in, up and the sign-in repeat the exit node it set, so
+# `tailscale up` does not refuse; clearing the exit node clears both of
+# its settings. The polkit action names
 # it and lets the active session run it without a password.
 set -euo pipefail
 
@@ -17,9 +20,14 @@ export TS_TEST="$work" PATH="$work/bin:$PATH"
 
 cat >"$work/bin/tailscale" <<'STUB'
 #!/bin/bash
+# Reading (prefs, status) is not logged; it changes nothing.
+case "$1 ${2:-}" in
+"debug prefs") cat "$TS_TEST/prefs" 2>/dev/null || echo '{}'; exit 0;;
+"status --json") cat "$TS_TEST/status" 2>/dev/null || echo '{}'; exit 0;;
+esac
 echo "$*" >>"$TS_TEST/calls"
 case "$1 ${2:-}" in
-"up ")
+"up "*)
   case $(cat "$TS_TEST/up-mode" 2>/dev/null) in
   signed-out) printf '\nTo authenticate, visit:\n\n\thttps://login.tailscale.com/a/abc123\n\n' >&2; sleep 30;;
   fails) echo "backend error: boom" >&2; exit 3;;
@@ -50,7 +58,7 @@ ok exit-node 100.127.255.254
 ok exit-node fd7a:115c:a1e0::3
 [[ $(calls) == 'set --exit-node=fd7a:115c:a1e0::3 --exit-node-allow-lan-access=true' ]] || fail "IPv6 exit node: $(calls)"
 ok exit-node ''
-[[ $(calls) == 'set --exit-node=' ]] || fail "clearing the exit node: $(calls)"
+[[ $(calls) == 'set --exit-node= --exit-node-allow-lan-access=false' ]] || fail "clearing the exit node: $(calls)"
 
 # Anything else is refused before tailscale runs.
 refused
@@ -59,6 +67,12 @@ refused status
 refused down --accept-routes
 refused up --ssh
 refused login --operator=alice
+refused up --operator alice
+refused down --operator=alice
+refused exit-node --operator=alice
+refused exit-node 100.64.0.2 --operator=alice
+refused send --operator=alice 100.64.0.4 a.txt
+refused --operator=alice up
 refused exit-node
 refused exit-node 100.64.0.2 extra
 for addr in 10.0.0.1 100.63.255.1 100.128.0.1 100.64.0.256 100.64.0 '100.64.0.2 --ssh' --ssh '100.64.0.2,' \
@@ -102,6 +116,33 @@ status=0
 "$helper" up 2>"$work/err" >/dev/null || status=$?
 [[ $status == 3 ]] || fail "up failure status: $status"
 grep -qx 'backend error: boom' "$work/err" || fail "up failure text: $(<"$work/err")"
+
+# Signed out with a coordination server set (a sign-in that expired or was
+# signed out), `tailscale up` must repeat the helper's own settings or it
+# refuses; signed in, or before the first sign-in, it gets no flags.
+echo >"$work/up-mode"
+prefs() { printf '{"ControlURL":"%s","ExitNodeIP":"%s","ExitNodeID":"%s","ExitNodeAllowLANAccess":%s,"Config":%s}' "$@" >"$work/prefs"; }
+state() { printf '{"BackendState":"%s","Peer":{"k":{"ID":"n7","TailscaleIPs":["100.64.0.7","fd7a:115c:a1e0::7"]}}}' "$1" >"$work/status"; }
+cs=https://controlplane.tailscale.com signedin='{"UserProfile":{"LoginName":"me@example.com"}}'
+up_calls() { rm -f "$work/calls"; "$helper" "$1" >/dev/null || fail "$1 failed: $(calls)"; calls; }
+prefs "$cs" 100.64.0.9 '' true null; state NeedsLogin
+[[ $(up_calls login) == 'up --exit-node=100.64.0.9 --exit-node-allow-lan-access=true' ]] || fail "exit node kept: $(calls)"
+[[ $(up_calls up) == 'up --exit-node=100.64.0.9 --exit-node-allow-lan-access=true' ]] || fail "up, exit node kept: $(calls)"
+prefs "$cs" '' n7 false "$signedin"; state NeedsLogin
+[[ $(up_calls login) == 'up --exit-node=100.64.0.7' ]] || fail "exit node by ID: $(calls)"
+prefs "$cs" '' '' true null; state NeedsLogin
+[[ $(up_calls login) == $'set --exit-node= --exit-node-allow-lan-access=false\nup' ]] ||
+  fail "local network without an exit node: $(calls)"
+prefs "$cs" '' n9 true null; state NeedsLogin
+[[ $(up_calls login) == $'set --exit-node= --exit-node-allow-lan-access=false\nup' ]] ||
+  fail "an exit node tailscaled no longer knows: $(calls)"
+prefs "$cs" '--ssh' '' false null; state NeedsLogin
+[[ $(up_calls login) == up ]] || fail "a stored exit node that is not an address: $(calls)"
+prefs "$cs" 100.64.0.9 '' true "$signedin"; state Stopped
+[[ $(up_calls up) == up ]] || fail "signed in, up added flags: $(calls)"
+prefs '' 100.64.0.9 '' true null; state NoState
+[[ $(up_calls login) == up ]] || fail "before the first sign-in, login added flags: $(calls)"
+rm -f "$work/prefs" "$work/status"
 
 # The polkit action: this helper, without a password for the active session only.
 policy=$root/default/polkit/tv.subcult.tailscale.policy

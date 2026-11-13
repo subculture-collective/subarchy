@@ -280,11 +280,12 @@ class DockerTui(unittest.TestCase):
 
 class TailscaleHelper(unittest.TestCase):
     # No operator in `tailscale debug prefs`, `tailscale down` refused to the
-    # user, pkaction --verbose (polkit 126 format), the helper, the receiver.
+    # user, pkaction --verbose (polkit 126 format), the helper, the receiver
+    # (wanted by tailscaled, enabled, running).
     PKACTION = (" implicit any: auth_admin\n implicit inactive: auth_admin\n implicit active: yes\n"
                 " annotation: org.freedesktop.policykit.exec.path -> /usr/lib/subcult/tailscale-helper\n")
 
-    def out(self, operators="0", user="USER_DENIED", pkaction=PKACTION, tail="HELPER\nenabled\nactive\n"):
+    def out(self, operators="0", user="USER_DENIED", pkaction=PKACTION, tail="HELPER\nWANTED\nenabled\nactive\n"):
         return f"{operators}\n{user}\n{pkaction}{tail}"
 
     def test_no_operator_helper_and_receiver_pass(self):
@@ -300,9 +301,10 @@ class TailscaleHelper(unittest.TestCase):
         self.assertFalse(install_test.tailscale_helper_ok(self.out(pkaction=self.PKACTION.replace("tailscale-helper", "x"))))
 
     def test_a_missing_helper_or_receiver_fails(self):
-        self.assertFalse(install_test.tailscale_helper_ok(self.out(tail="enabled\nactive\n")))
-        self.assertFalse(install_test.tailscale_helper_ok(self.out(tail="HELPER\ndisabled\ninactive\n")))
-        self.assertFalse(install_test.tailscale_helper_ok(self.out(tail="HELPER\nenabled\nfailed\n")))
+        self.assertFalse(install_test.tailscale_helper_ok(self.out(tail="WANTED\nenabled\nactive\n")))
+        self.assertFalse(install_test.tailscale_helper_ok(self.out(tail="HELPER\nenabled\nactive\n")))
+        self.assertFalse(install_test.tailscale_helper_ok(self.out(tail="HELPER\nWANTED\ndisabled\ninactive\n")))
+        self.assertFalse(install_test.tailscale_helper_ok(self.out(tail="HELPER\nWANTED\nenabled\nfailed\n")))
 
 
 class GreeterSession(unittest.TestCase):

@@ -476,10 +476,11 @@ func interactive(name string, args ...string) error {
 
 func action(what string) error {
 	switch what {
-	case "reboot":
-		return exec.Command("systemctl", "reboot").Run()
-	case "poweroff":
-		return exec.Command("systemctl", "poweroff").Run()
+	case "reboot", "poweroff":
+		// Only emergencies on the console from here: the watchdog and
+		// console warnings of a normal shutdown stay in the journal.
+		exec.Command("dmesg", "-n", "1").Run()
+		return exec.Command("systemctl", what).Run()
 	case "log":
 		return interactive("less", "+G", installLog)
 	}

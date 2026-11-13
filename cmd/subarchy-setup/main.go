@@ -134,6 +134,9 @@ type env struct {
 	// wifi is the live image's Wi-Fi; nil means no network page and
 	// nothing carried over.
 	wifi *wifi
+	// lookupZone returns the time zone of the network's location, or ""
+	// offline; nil means no lookup.
+	lookupZone func() string
 }
 
 // collect asks every question and returns the answers.
@@ -238,7 +241,13 @@ func collect(p *prompter, e env, repo, cmdlineExtra string) (setup.Answers, erro
 	} else if a.Passphrase, err = p.askSecret("Disk passphrase", 8); err != nil {
 		return a, err
 	}
-	if a.Timezone, err = p.ask("Time zone", "UTC", func(s string) error { return setup.ValidTimezone(e.zoneinfo, s) }); err != nil {
+	zone := "UTC"
+	if e.lookupZone != nil {
+		if z := e.lookupZone(); z != "" && setup.ValidTimezone(e.zoneinfo, z) == nil {
+			zone = z // the network's location; Enter takes it
+		}
+	}
+	if a.Timezone, err = p.ask("Time zone", zone, func(s string) error { return setup.ValidTimezone(e.zoneinfo, s) }); err != nil {
 		return a, err
 	}
 	if note := carryWiFi(&a, e.wifi); note != "" {
@@ -376,7 +385,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, e env, secret func() 
 		e.screens = nil
 	}
 	if *batch {
-		e.browse, e.action, e.screens, e.wifi = nil, nil, nil, nil
+		e.browse, e.action, e.screens, e.wifi, e.lookupZone = nil, nil, nil, nil, nil
 	}
 	var a setup.Answers
 	var err error
@@ -464,6 +473,12 @@ func main() {
 		logTail:    logTail,
 		action:     action,
 		wifi:       realWiFi(),
+		lookupZone: func() string {
+			if !hasDefaultRoute("/proc/net/route", "/proc/net/ipv6_route") {
+				return "" // offline: nothing to ask
+			}
+			return lookupZone(httpGet)
+		},
 	}
 	if onConsole() {
 		prepareConsole(os.Stdout)

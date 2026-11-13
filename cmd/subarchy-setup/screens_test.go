@@ -138,6 +138,10 @@ func TestScreensInstall(t *testing.T) {
 	if !strings.Contains(callText(g), "--header Keyboard layout --padding 0 0 0 26 --cursor.foreground 2 --header.foreground 5 --selected.foreground 2 --selected=German --") {
 		t.Error("choosing German did not preselect the German keyboard")
 	}
+	// Offline (no lookup here), the time zone list opens on the language's zone.
+	if !strings.Contains(callText(g), "--no-fuzzy Europe/Berlin UTC") || !strings.Contains(out.String(), "Guessed from the language you chose.") {
+		t.Error("choosing German did not put Europe/Berlin first in the time zone list")
+	}
 	if !strings.Contains(callText(g), `[vfat "EFI", ntfs "Windows"]`) || !strings.Contains(callText(g), "[empty]") {
 		t.Errorf("disk rows lack the partition summary: %s", callText(g))
 	}

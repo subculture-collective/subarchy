@@ -27,10 +27,12 @@ stub sudo '"$@"'
 stub subcult '[[ -e $FP_TEST/reader ]]'
 # Installing fprintd puts its tools on PATH.
 stub pacman 'for t in "$FP_TEST"/fprintd/*; do ln -sf "$t" "$FP_TEST/bin/"; done'
+# Like fprintd 1.94: the list names each enrolled finger; enroll -f FINGER adds it.
 stub fprintd-list 'if [[ -e $FP_TEST/no-devices ]]; then echo "No devices available"; exit 1; fi
-if [[ -e $FP_TEST/enrolled ]]; then echo "Fingerprints for user x on Reader (press):"; echo " - #0: right-thumb"; exit 0; fi
+if [[ -s $FP_TEST/enrolled ]]; then echo "Fingerprints for user x on Reader (press):"; n=0
+  while read -r f; do echo " - #$n: $f"; n=$((n + 1)); done <"$FP_TEST/enrolled"; exit 0; fi
 echo "User x has no fingers enrolled for Reader."' fprintd
-stub fprintd-enroll '[[ ! -e $FP_TEST/enroll-fails ]] && : >"$FP_TEST/enrolled"' fprintd
+stub fprintd-enroll '[[ ! -e $FP_TEST/enroll-fails && $1 == -f && -n $2 ]] && echo "$2" >>"$FP_TEST/enrolled"' fprintd
 stub fprintd-verify '' fprintd
 stub fprintd-delete '' fprintd
 
@@ -57,13 +59,25 @@ grep -q '^sudo fprintd-enroll' "$work/calls" || fail "enrollment did not run thr
 (($(line 'fprintd-enroll') > $(line 'pacman'))) || fail "enrolled before fprintd was installed"
 (($(line 'fprintd-verify') > $(line 'fprintd-enroll'))) || fail "verified before enrolling: $(tr '\n' ';' <"$work/calls")"
 grep -q 'password still works' "$work/out" || fail "the result does not say the password still works"
-grep -q 'Enrolled: right-thumb' "$work/out" || fail "the result does not say which finger fprintd enrolled: $(<"$work/out")"
-grep -qi 'right index' "$work/out" && fail "the result names a finger fprintd-enroll did not choose"
+called 'fprintd-enroll -f right-index-finger' || fail "the first finger was not asked for by name: $(tr '\n' ';' <"$work/calls")"
+grep -q 'Enrolled: right-index-finger' "$work/out" || fail "the result does not say which finger was enrolled: $(<"$work/out")"
 
-# Again with fprintd in place: it is not installed twice.
+# Again with fprintd in place: it is not installed twice, and the next
+# finger is added rather than the first one replaced.
 : >"$work/calls"
 run || fail "a second setup failed: $(<"$work/out")"
 called pacman && fail "fprintd was installed again"
+called 'fprintd-enroll -f left-index-finger' || fail "the second run did not pick the next finger: $(tr '\n' ';' <"$work/calls")"
+grep -q 'Enrolled: right-index-finger left-index-finger' "$work/out" || fail "both fingers are not listed: $(<"$work/out")"
+
+# All ten enrolled: it stops before enrolling.
+printf '%s\n' right-index-finger left-index-finger right-middle-finger left-middle-finger right-thumb \
+  left-thumb right-ring-finger left-ring-finger right-little-finger left-little-finger >"$work/enrolled"
+: >"$work/calls"
+run && fail "an eleventh finger was enrolled"
+called fprintd-enroll && fail "enrolled with every finger taken"
+grep -q 'all ten fingers' "$work/out" || fail "no reason given: $(<"$work/out")"
+: >"$work/enrolled"
 
 # fprintd installed but no reader it can drive: stop before enrolling.
 : >"$work/calls"

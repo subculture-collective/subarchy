@@ -4,7 +4,7 @@ type: decision
 status: accepted
 adr: 53
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-13
 tags: [decision, adr, legal]
 aliases: [ADR 0053, R5, Licence, GPL]
 ---
@@ -57,5 +57,21 @@ public.
 - GPL-3.0 plugin code such as Obsidian's Advanced Tables could now be
   committed, but the vault still installs plugins from pinned releases to keep
   third-party code out of the repository.
+
+## Progress
+
+- 2026-11-13: the app-list packages Subarchy now rebuilds into its
+  repository (`packaging/aur/`) carry these licences, to check at the
+  release gate:
+
+  | Package | Licence | Note |
+  |---|---|---|
+  | `claude-code` | Proprietary (Anthropic) | Anthropic's terms page, shipped as the package licence, says preinstalling Claude Code in a product requires agreeing to its Commercial Terms of Service, shipping the binary unmodified and keeping its sign-in methods. The package runs the binary as published, through a wrapper that only sets `DISABLE_UPDATES` and `DISABLE_INSTALLATION_CHECKS`. Before a public release the owner decides whether to accept those terms or leave Claude Code to be installed on demand |
+  | `proton-mail-bin`, `proton-pass-bin`, `proton-pass-cli`, `proton-authenticator-bin` | GPL-3.0-or-later | `proton-pass-bin` also bundles Electron (MIT) |
+  | `proton-drive-cli-bin`, `cliamp`, `ttfx`, `voxtype-bin` | MIT | `voxtype-bin` ships no models; the user downloads one |
+  | `localsend-bin` | Apache-2.0 |  |
+
+  `displaylink` and the NVIDIA 580xx packages carry their vendors' own
+  licences (`custom`); their redistribution terms also need checking.
 
 Related: [[decision-map|Decision map]] · [[0052-name-identity|ADR 0052]]

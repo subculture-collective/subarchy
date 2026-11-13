@@ -3,7 +3,7 @@ title: "Package publishing"
 type: guide
 status: active
 created: 2026-11-08
-updated: 2026-11-12
+updated: 2026-11-13
 tags: [guide, ci, packages]
 ---
 
@@ -62,8 +62,12 @@ one of them: `nvidia-580xx-utils` carries `-2` against the lib32 package's
 `580.196.07-1` versions stay in the registry; the databases list `-2`.
 
 **The public route refuses uploads over 100 MB.** Cloudflare in front of
-`git.subcult.tv` answers HTTP 413, and `nvidia-580xx-utils` is about
-360 MB. The uploader stops with a message naming the file. Until CI has a
+`git.subcult.tv` answers HTTP 413. Three packages are over it:
+`nvidia-580xx-utils` (about 360 MB), `claude-code` 2.1.323 (154 MB) and
+`proton-pass-bin` 1.43.1 (145 MB); each new version of them needs the
+upload below. The uploader stops with a message naming the file, and it
+uploads in name order, so until such a file is in the registry the files
+after it, the core included, are not published either. Until CI has a
 route for such files, build that PKGBUILD in a clean Arch container
 (`packaging/aur/build.sh` does) and upload the file through an SSH forward
 to Gitea's origin on Almaz, so the token does not cross the network in

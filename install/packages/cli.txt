@@ -61,6 +61,14 @@ ufw-docker
 # Networking (ADR 0058): tailscaled runs; the user signs in when they want it.
 tailscale
 
-# Coding agents with a terminal interface (app list, "AI and development")
+# Coding agents with a terminal interface (app list, "AI and development").
+# claude-code is rebuilt in Subarchy's repository (packaging/aur).
+claude-code
 openai-codex
 opencode
+
+# Rebuilt in Subarchy's repository (packaging/aur): the terminal music
+# player (app list, "Music and video") and the terminal text effects the
+# screensaver loops are recorded from (ADR 0036, 0056)
+cliamp
+ttfx

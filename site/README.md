@@ -22,6 +22,7 @@ the source changes.
 | On the page | Source |
 |---|---|
 | What the installer puts on the disk, the status table, the make targets | [README.md](../README.md) |
+| The packages `make iso` needs in `build/repo` first | [tools/iso/build.sh](../tools/iso/build.sh), [packaging/aur/build.sh](../packaging/aur/build.sh) |
 | What the installer asks, the time zone guess, the log path | [install/README.md](../install/README.md) |
 | Unattended install keys | the header of [install/subarchy-install](../install/subarchy-install) |
 | Default keys | [default/hypr/bindings.lua](../default/hypr/bindings.lua) |

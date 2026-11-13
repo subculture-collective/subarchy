@@ -37,9 +37,12 @@
 <p>Subarchy is in development and has no release. This page covers what works today, taken from the source at the time of writing. The design decisions are in the <a href="https://github.com/subculture-collective/subarchy/blob/main/docs/decisions/decisions-index.md">decision records</a>.</p>
 
 <h2 id="try"><span class="n">01</span>Try it</h2>
-<p>There is no published image. Build the ISO on Arch Linux with <code>archiso</code> and sudo; it lands in <code>build/iso/</code>.</p>
+<p>There is no published image. Build the ISO on Arch Linux. You need <code>archiso</code>, Go, Docker and sudo; the image lands in <code>build/iso/</code>.</p>
 <div class="cmd"><code>git clone https://github.com/subculture-collective/subarchy.git && cd subarchy</code></div>
 <div class="cmd"><code>make iso</code></div>
+<p>The image carries a few packages that Subarchy rebuilds from pinned sources, among them the Limine packages, Neovim with its plugins and the keyring. On a fresh checkout they are not in <code>build/repo</code> yet, so the first <code>make iso</code> stops with a line that starts <code>build.sh: not in build/repo:</code> and lists them. Build the ones it lists in a clean container, then run <code>make iso</code> again:</p>
+<div class="cmd"><code>packaging/aur/build.sh &lt;package&gt;...</code></div>
+<p>CI does not rebuild them; it takes them from Subarchy's signed package registry (<code>tools/ci/build-iso.sh</code>).</p>
 <p>Boot it in QEMU and check it over the serial console (needs <code>qemu-base</code> and <code>edk2-ovmf</code>):</p>
 <div class="cmd"><code>make iso-test</code></div>
 <p>Install from the newest ISO into a VM disk, then boot and check the result (also needs <code>swtpm</code> and <code>imagemagick</code>):</p>

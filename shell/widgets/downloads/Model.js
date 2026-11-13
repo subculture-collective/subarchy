@@ -37,9 +37,10 @@ function finishedPath(line) {
   return s.startsWith("/") ? s : ""
 }
 
-// The yt-dlp command for a job.
+// The yt-dlp command for a job. --print implies --quiet, which also turns
+// progress off, so --progress brings the [download] lines back.
 function command(u, directory, audioOnly) {
-  const args = ["yt-dlp", "--newline", "--no-colors", "--no-playlist", "--print", "after_move:filepath",
+  const args = ["yt-dlp", "--newline", "--progress", "--no-colors", "--no-playlist", "--print", "after_move:filepath",
     "--no-simulate", "-P", directory, "-o", "%(title).150B [%(id)s].%(ext)s"]
   if (audioOnly)
     args.push("-x", "--audio-format", "best")

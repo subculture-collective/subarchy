@@ -9,3 +9,5 @@ singleton DellPower 1.0 DellPower.qml
 singleton BluetoothPairing 1.0 BluetoothPairing.qml
 singleton MediaChoice 1.0 MediaChoice.qml
 singleton Ht3 1.0 Ht3.qml
+singleton SettingsRunner 1.0 SettingsRunner.qml
+singleton Wallpaper 1.0 Wallpaper.qml

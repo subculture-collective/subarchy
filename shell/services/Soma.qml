@@ -5,8 +5,9 @@ import Quickshell.Io
 import "../widgets/soma/Model.js" as Model
 
 // SomaFM playback, shared by the bar widget and its panel. The channel list
-// is fetched when asked (the panel opening); a channel plays through mpv,
-// whose JSON IPC socket reports the stream's title as it changes, so
+// is fetched when asked: the panel opening, or `play <id>` before the list
+// has ever loaded, which plays once it arrives. A channel plays through
+// mpv, whose JSON IPC socket reports the stream's title as it changes, so
 // now-playing is an event, not a poll. Nothing runs while stopped.
 Singleton {
   id: root
@@ -21,6 +22,8 @@ Singleton {
   property string song: ""
   property string playError: ""
   property string pendingUrl: ""
+  // A channel asked for before the list first loaded; played when it does.
+  property string pendingId: ""
   property bool stopping: false
   property int attempts: 0
 
@@ -33,6 +36,11 @@ Singleton {
 
   function play(id) {
     const c = Model.find(root.channels, id)
+    if (!c && root.channelsAt === 0) {
+      root.pendingId = id
+      root.loadChannels()
+      return true
+    }
     const url = Model.streamUrl(c, root.format)
     if (url === "")
       return false
@@ -86,6 +94,11 @@ Singleton {
           root.channels = Model.parseChannels(text)
           root.channelsError = ""
           root.channelsAt = Date.now()
+          if (root.pendingId !== "") {
+            const id = root.pendingId
+            root.pendingId = ""
+            root.play(id)
+          }
         } catch (e) {
           root.channelsError = "SomaFM's channel list did not load"
         }
@@ -94,6 +107,7 @@ Singleton {
     onExited: (code) => {
       if (code !== 0)
         root.channelsError = "SomaFM's channel list did not load"
+      root.pendingId = ""
     }
   }
 

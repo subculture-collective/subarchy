@@ -4,7 +4,7 @@ type: decision
 status: accepted
 adr: 26
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-13
 tags: [decision, adr, packages, updates]
 aliases: [ADR 0026, P3, Update model, Channels]
 ---
@@ -112,5 +112,13 @@ delays stable updates rather than breaking them.
   read. The root steps run through `subcult-update privileged`, which sudo
   allows without a password (ADR 0062). The bar indicator, channels and
   restart detection remain.
+- 2026-11-13: the bar's updates widget (`shell/widgets/updates/`) shows
+  the count, and `subcult update` reports which services need a restart
+  (`internal/update/restart.go`, C5 #88). Update authentication now
+  follows [[0069-update-authentication|ADR 0069]]: `subcult update`
+  authenticates through sudo once at the start, and the passwordless sudo
+  rule is gone. The stable snapshot advances weekly through
+  `tools/ci/advance-snapshot.sh`, after the ISO build and VM install test
+  pass against the new date ([[package-publishing]]).
 
 Related: [[decision-map|Decision map]] · [[0025-package-repository|ADR 0025]] · [[0011-snapshots|ADR 0011]]

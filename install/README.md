@@ -137,9 +137,7 @@ What it builds:
 | Boot entries | firmware entries named Limine or Subarchy whose partition no longer exists (left by an earlier install on a disk since wiped) are removed; other systems' entries are not touched | 0007 |
 | Factory reset | read-only `@factory` snapshot of the fresh `@` | 0049, 0056 |
 
-Not yet: the
-Quickshell shell and themes, hardware detection, and a Limine entry that
-chainloads another disk's bootloader.
+Not yet: a Limine entry that chainloads another disk's bootloader.
 
 A new system is on the stable channel: Arch packages come from the Arch
 Linux Archive at the snapshot date the package ships; `subcult channel set

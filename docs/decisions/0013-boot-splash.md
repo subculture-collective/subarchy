@@ -69,6 +69,9 @@ borrowed.
   `tries=0` to `rd.luks.options`, so the prompt asks again without limit:
   the default of three ended in the initrd's emergency shell, which the
   locked root account cannot open. Migration `1794532900` adds it to
-  earlier installs and rebuilds their UKIs.
+  earlier installs and rebuilds their UKIs. A splash recoloured earlier is
+  a copy made by `subcult theme apply-system` and keeps the old prompt
+  until that runs again; the migration says so when `subarchy-user` is
+  selected.
 
 Related: [[decision-map|Decision map]] · [[0008-initramfs|ADR 0008]] · [[brand-identity|Brand identity]]

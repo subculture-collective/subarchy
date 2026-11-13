@@ -451,8 +451,20 @@ def boot(disk: Path, vars_file: Path) -> bool:
         unlocked = serial.expect(re.compile(rb"login: |emergency mode"), 180)
         unlock_retry = unlocked.endswith(b"login: ") and b"account is locked" not in unlocked
         if not unlock_retry:
-            # Enter left emergency mode and the plain console asks again.
-            serial.expect(re.compile(rb"assphrase for"), 120)
+            # Emergency mode: sulogin waits for Enter, then the plain
+            # console asks for the passphrase again. The right passphrase
+            # sent above may have been that Enter, if sulogin was already
+            # waiting; when no prompt follows, press Enter now. This only
+            # gets the boot to the remaining checks; the unlock check fails.
+            try:
+                serial.expect(re.compile(rb"Press Enter"), 60)
+            except TimeoutError:
+                pass
+            try:
+                serial.expect(re.compile(rb"assphrase for"), 20)
+            except TimeoutError:
+                serial.send("\n")
+                serial.expect(re.compile(rb"assphrase for"), 120)
             serial.send(PASSPHRASE + "\n")
             serial.expect(re.compile(rb"login: "), 180)
         print(f"install-test: login prompt after {time.monotonic() - started:.0f}s")
@@ -561,10 +573,17 @@ def boot(disk: Path, vars_file: Path) -> bool:
             # The system screens take the user's palette (ADR 0037): SDDM's
             # theme.conf, Limine's colours, a recoloured splash (one initramfs
             # rebuild), Chromium skipped since it is not installed; again: nothing.
+            # The first run is the privileged half with pkexec's PATH, which
+            # has no /usr/local/bin: the rebuild must still reach every UKI.
             "theme_system": serial.run(
                 "mkdir -p ~/.config/subcult/theme && printf '%s' '{\"schema\": 1, \"appearance\": \"dark\", \"colors\": {\"base\": \"#1a1b26\", \"text\": \"#c0caf5\", \"mauve\": \"#bb9af7\", \"surface0\": \"#24283b\"}}' > ~/.config/subcult/theme/palette.json;"
-                f" subcult theme apply-system --elevate sudo; {sudo} cp /boot/limine.conf /tmp/limine-after-theme.conf; echo ---;"
+                f" {sudo} touch /tmp/theme-stamp; sleep 1;"
+                f" {sudo} env PATH=/usr/sbin:/usr/bin:/sbin:/bin /usr/bin/subcult-theme system-apply"
+                " --colors base=#1a1b26,mauve=#bb9af7,surface0=#24283b,text=#c0caf5 --appearance dark; echo SYSTEM_APPLY_EXIT=$?;"
+                f" {sudo} cp /boot/limine.conf /tmp/limine-after-theme.conf; echo ---;"
                 f" subcult theme apply-system --elevate sudo; {sudo} diff -u /tmp/limine-after-theme.conf /boot/limine.conf; echo ---;"
+                f" {sudo} find /boot/EFI/Linux -name '*.efi' -newer /tmp/theme-stamp | wc -l;"
+                f" {sudo} find /boot/EFI/Linux -name '*.efi' ! -newer /tmp/theme-stamp | wc -l; echo ---;"
                 f" grep -c '^base=#1a1b26' /usr/share/sddm/themes/subarchy/theme.conf; {sudo} grep -c '^interface_branding_colour: bb9af7' /boot/limine.conf;"
                 " plymouth-set-default-theme; grep -c 'SetBackgroundTopColor(0.102, 0.106, 0.149)' /usr/share/plymouth/themes/subarchy-user/subarchy-user.script",
                 timeout=600,
@@ -873,7 +892,7 @@ finally:
         "greeter shows the theme (ink background, no QML errors)": "100B19" in r["greeter_palette"]
         and r["sddm_log"].strip().splitlines()[-1:] == ["0"],
         "default palette restored after the system-theme probe": "THEME_RESET" in r["theme_reset"],
-        "theme apply-system recolours SDDM, Limine and the splash, rebuilding the initramfs once": theme_system_ok(r["theme_system"]),
+        "theme apply-system recolours SDDM, Limine and the splash, rebuilding every UKI once (also with pkexec's PATH)": theme_system_ok(r["theme_system"]),
         "Plymouth theme selected with its images": "subarchy" in r["plymouth_theme"].split()
         and all(f in r["plymouth_theme"] for f in ("logo.png", "subarchy.script", "entry.png", "progress-bar.png")),
         "idle service runs generated config and DPMS on/off are idempotent":
@@ -1147,14 +1166,16 @@ def hw_ok(out: str) -> bool:
 
 
 def theme_system_ok(out: str) -> bool:
-    """Two apply-system runs (the first rebuilds the initramfs, the second changes nothing), then the files."""
+    """Two runs (the first rebuilds every UKI, the second changes nothing), then the files."""
     parts = [p.strip() for p in re.split(r"(?m)^---$", out)]
-    if len(parts) != 3:
+    if len(parts) != 4:
         return False
-    first, second, files = parts
+    first, second, ukis, files = parts
+    fresh, stale = (ukis.split() + ["", ""])[:2]
     return (
         "rebuilding the initramfs" in first and "wrote /usr/share/sddm/themes/subarchy/theme.conf" in first
-        and "skipped: Chromium" in first
+        and "skipped: Chromium" in first and "SYSTEM_APPLY_EXIT=0" in first
+        and fresh.isdigit() and int(fresh) >= 2 and stale == "0"
         and "no initramfs rebuild" in second and "wrote" not in second
         and files.splitlines()[-4:-1] == ["1", "1", "subarchy-user"] and files.splitlines()[-1] == "1"
     )

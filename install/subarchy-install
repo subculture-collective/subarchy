@@ -246,7 +246,9 @@ pacman_conf() {
   # move HookDir under the new root. limine-mkinitcpio-hook's
   # 90-mkinitcpio-install.hook there replaces mkinitcpio's own, so each
   # kernel is built once, as its UKI, and no unused initramfs-*.img lands
-  # on the ESP.
+  # on the ESP. It writes no /etc/mkinitcpio.d presets either, so
+  # `mkinitcpio -P` finds nothing to build; Subarchy's tools rebuild with
+  # limine-mkinitcpio.
   echo "HookDir = $target/etc/pacman.d/hooks/"
   (($1)) && printf '[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[extra]\nInclude = /etc/pacman.d/mirrorlist\n\n'
   printf '[subarchy]\nSigLevel = Optional TrustAll\nServer = %s\n' "${conf[SUBARCHY_REPO]}"

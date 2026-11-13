@@ -2,7 +2,8 @@
 # The migration that adds tries=0 to the disk unlock options, against a fake
 # root with stand-ins for sudo and limine-mkinitcpio: it edits both command
 # lines once, rebuilds the boot images only when it changed something, and
-# a failed rebuild leaves the command lines as they were.
+# a failed rebuild, of all kernels or of one, leaves the command lines as
+# they were.
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
@@ -18,16 +19,22 @@ cat >"$work/bin/sudo" <<'STUB'
 echo "sudo $*" >>"$MIG_TEST/calls"
 exec "$@"
 STUB
+# Like limine-mkinitcpio 1.40.0: a kernel whose mkinitcpio run fails is
+# skipped and the command still exits 0.
 cat >"$work/bin/limine-mkinitcpio" <<'STUB'
 #!/bin/bash
-[[ ! -e $MIG_TEST/rebuild-fails ]]
+[[ ! -e $MIG_TEST/rebuild-fails ]] || exit 1
+later=@$(($(date +%s) + 60))
+touch -d "$later" "$SUBCULT_TEST_ROOT/boot/EFI/Linux/subarchy_linux-zen.efi"
+[[ -e $MIG_TEST/lts-fails ]] || touch -d "$later" "$SUBCULT_TEST_ROOT/boot/EFI/Linux/subarchy_linux-lts.efi"
 STUB
 chmod +x "$work/bin/sudo" "$work/bin/limine-mkinitcpio"
 
 uuid=0b5c4e2a-1111-2222-3333-444455556666
 fresh() { # $1: the rd.luks.options value an earlier install wrote
-  rm -rf "$work/root" "$work/calls" "$work/rebuild-fails"
-  mkdir -p "$work/root/etc/default" "$work/root/etc/kernel"
+  rm -rf "$work/root" "$work/calls" "$work/rebuild-fails" "$work/lts-fails"
+  mkdir -p "$work/root/etc/default" "$work/root/etc/kernel" "$work/root/boot/EFI/Linux"
+  touch -d 2026-01-01 "$work/root/boot/EFI/Linux/subarchy_linux-zen.efi" "$work/root/boot/EFI/Linux/subarchy_linux-lts.efi"
   local line="rd.luks.name=$uuid=root rd.luks.options=$1 root=/dev/mapper/root rootflags=subvol=@ rw quiet splash"
   echo "$line" >"$work/root/etc/kernel/cmdline"
   printf '# Subarchy boot entries\nKERNEL_CMDLINE[default]="%s"\nENABLE_UKI=yes\n' "$line" >"$work/root/etc/default/limine"
@@ -68,6 +75,21 @@ grep -q 'rd.luks.options=discard root=' "$work/root/etc/kernel/cmdline" || fail 
 rm "$work/rebuild-fails"
 run >/dev/null || fail "the run after a failed rebuild failed"
 grep -q 'rd.luks.options=discard,tries=0 root=' "$work/root/etc/default/limine" || fail "the run after a failed rebuild did not add tries=0"
+
+# mkinitcpio fails for one kernel and limine-mkinitcpio still exits 0: its
+# UKI keeps the old line, so the change is taken back.
+fresh discard
+touch "$work/lts-fails"
+run >/dev/null 2>&1 && fail "the migration passed although one kernel was not rebuilt"
+grep -q 'rd.luks.options=discard root=' "$work/root/etc/default/limine" || fail "default/limine kept tries=0 after one kernel was not rebuilt"
+
+# A splash recoloured by apply-system: the user is told to run it again.
+fresh discard,tries=0
+mkdir -p "$work/root/etc/plymouth"
+printf '[Daemon]\nTheme=subarchy-user\n' >"$work/root/etc/plymouth/plymouthd.conf"
+[[ $(run) == *"subcult theme apply-system"* ]] || fail "no hint for a recoloured splash"
+printf '[Daemon]\nTheme=subarchy\n' >"$work/root/etc/plymouth/plymouthd.conf"
+[[ -z $(run) ]] || fail "a hint for the packaged splash"
 
 # No LUKS options at all: left alone.
 fresh discard

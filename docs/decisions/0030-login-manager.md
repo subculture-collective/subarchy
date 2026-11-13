@@ -73,12 +73,16 @@ Hyprland. Artwork and text are replaced (R4).
   User and Password fields in the lock's style (surface box, violet edge,
   green bullets, a padlock), a Sign in button, and `Subarchy · <host>`
   under them. Spacing and type grow with the logical screen size, from 1
-  at 1280x800 to 2 at 3840x2160; below 640x560 the clock is left out.
+  at 1280x800 to 2 at 3840x2160; below 640x600 the clock is left out.
+  Two lines under the button stay free for a message, so the form does
+  not move when one appears.
   The focused field's label turns bold. A running check shows "Checking…"
   in the field and "Signing in…" on the button. Return on the button signs
-  in. Escape clears the password and the last message. A Caps Lock tag
-  appears inside the password field: SDDM reports Caps Lock only under
-  X11, so under Wayland the greeter infers it from the letters typed.
+  in. Escape clears the password and the last message; in the user field
+  it puts back the last user. A Caps Lock tag appears inside the password
+  field: SDDM reports Caps Lock only under X11, so under Wayland the
+  greeter infers it from the letters typed, and shows nothing until the
+  first letter.
   `theme.conf` gains `accent` (the palette's green) for the bullets.
   `tools/test/greeter-test.sh` covers these and keeps previews at
   1280x800, 2560x1440 and 320x480.

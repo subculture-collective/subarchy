@@ -61,7 +61,9 @@ Item {
       greeter.pamLines = []
       greeter.afterPamText = false
       greeter.capsGuess = false
+      greeter.capsKnown = false
       fixture.keyboard.capsLock = false
+      fixture.config = ({})
       sddm.calls = 0
       sddm.lastPassword = ""
       user.text = "tester"
@@ -135,6 +137,17 @@ Item {
       keyClick(Qt.Key_Escape)
       compare(password.text, "")
       verify(password.activeFocus, "Escape returns to the password")
+      // In the user field Escape puts back the last user and stays there.
+      password.text = "fixture-password"
+      user.forceActiveFocus()
+      user.text = "someone-else"
+      greeter.message = "That password didn't work. Try again."
+      keyClick(Qt.Key_Escape)
+      compare(user.text, "tester")
+      verify(user.activeFocus, "focus stays in the user field")
+      compare(password.text, "fixture-password", "the password is left alone")
+      compare(greeter.message, "")
+      password.forceActiveFocus()
       password.text = "fixture-password"
       greeter.login()
       greeter.clear()
@@ -145,6 +158,12 @@ Item {
     function test_capsLock() {
       const hint = findChild(greeter, "capsLockHint")
       verify(!hint.visible)
+      // Caps Lock may already be on (from the disk unlock prompt); the key
+      // alone cannot say which way it went, so the tag waits for a letter.
+      keyClick(Qt.Key_CapsLock)
+      verify(!greeter.capsLock && !hint.visible, "no guess before a letter")
+      keyClick(Qt.Key_CapsLock)
+      verify(!greeter.capsLock && !hint.visible)
       fixture.keyboard.capsLock = true
       verify(hint.visible, "SDDM's own Caps Lock state shows")
       fixture.keyboard.capsLock = false
@@ -164,6 +183,14 @@ Item {
       keyClick(Qt.Key_CapsLock)
       verify(!greeter.capsLock, "the Caps Lock key turns the hint off")
       keyClick(Qt.Key_CapsLock)
+      verify(greeter.capsLock)
+      // The key counts wherever focus is.
+      submit.forceActiveFocus()
+      keyClick(Qt.Key_CapsLock)
+      verify(!greeter.capsLock, "Caps Lock on the button turns the hint off")
+      keyClick(Qt.Key_CapsLock)
+      verify(greeter.capsLock)
+      password.forceActiveFocus()
       password.text = "fixture-password"
       greeter.login()
       verify(!hint.visible, "the hint gives way to the check")
@@ -182,12 +209,30 @@ Item {
       verify(user.enabled && password.enabled && submit.enabled)
     }
 
-    // 1280x800 is the smallest full layout; 1280x800 at scale 1.5 leaves
+    // 1280x600 is the smallest full layout; 1280x800 at scale 1.5 leaves
     // out the clock; 4K at scale 1 doubles the type and spacing.
     function test_screenSizes() {
       compare(greeter.unit, 1)
       verify(findChild(greeter, "clock").visible)
       checkFits()
+      fixture.height = 600
+      wait(50)
+      verify(!greeter.compact && findChild(greeter, "clock").visible)
+      checkFits()
+      // faillock's two lines fit, and the form stays where it was.
+      const logo = findChild(greeter, "brandLogo")
+      const before = logo.mapToItem(greeter, 0, 0).y
+      greeter.message = "The account is locked due to 10 failed logins. (2 minutes left to unlock)"
+      wait(50)
+      verify(findChild(greeter, "loginError").lineCount >= 2, "the faillock text takes two lines here")
+      checkFits()
+      compare(logo.mapToItem(greeter, 0, 0).y, before, "a message does not move the form")
+      greeter.message = ""
+      wait(50)
+      compare(logo.mapToItem(greeter, 0, 0).y, before, "clearing it does not either")
+      fixture.height = 599
+      wait(50)
+      verify(greeter.compact)
       fixture.width = 853
       fixture.height = 533
       wait(50)
@@ -209,6 +254,35 @@ Item {
       compare(greeter.unit, 2)
       compare(user.width, 720)
       checkFits()
+    }
+
+    function test_clock() {
+      const time = findChild(greeter, "clockTime")
+      let timer = null
+      for (const o of greeter.resources)
+        if (o.objectName === "clockTimer")
+          timer = o
+      verify(time && timer)
+      verify(/^\d\d:\d\d$/.test(time.text), time.text)
+      verify(timer.running)
+      greeter.now = new Date(2001, 0, 2, 3, 4)
+      compare(time.text, "03:04")
+      fixture.height = 533
+      wait(50)
+      verify(greeter.compact && !timer.running, "no clock, no ticks")
+      fixture.height = 800
+      wait(50)
+      verify(timer.running)
+      verify(greeter.now.getFullYear() > 2001, "the clock catches up when it comes back")
+    }
+
+    // theme.conf from subcult theme apply-system recolours the form.
+    function test_configColours() {
+      fixture.config = { accent: "#123456", border: "#654321", borderInactive: "#222222" }
+      wait(30)
+      verify(Qt.colorEqual(password.color, "#123456"), "the bullets take accent")
+      verify(Qt.colorEqual(password.background.border.color, "#654321"), "the focused edge takes border")
+      verify(Qt.colorEqual(user.background.border.color, "#222222"), "the other edge takes borderInactive")
     }
 
     function test_emptyUser() {

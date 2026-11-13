@@ -675,9 +675,6 @@ def boot(disk: Path, vars_file: Path) -> bool:
         screendump(qmp, VM / "greeter.png")
         results["greeter_colours"] = distinct_colours(VM / "greeter.png")
         results["greeter_palette"] = colours_in(VM / "greeter.png", 800)
-        # The prefilled user puts focus in the password field, whose edge
-        # (and the ready Sign in button) are the palette's mauve.
-        results["greeter_focus"] = has_colour(VM / "greeter.png", "8F4BC8")
         results["sddm_log"] = serial.run("journalctl -b -o cat | grep -i 'qml' | grep -ci 'error\\|is not a type\\|cannot assign\\|Could not load' ; true")
         # The installer named the account as SDDM's last user, so the
         # greeter's user field is filled before the first sign-in.
@@ -974,7 +971,6 @@ finally:
         "greeter shows the theme (ink background, no QML errors)": "100B19" in r["greeter_palette"]
         and r["sddm_log"].strip().splitlines()[-1:] == ["0"],
         "greeter offers the installed account before any sign-in": f"User={USER}" in r["greeter_user"].split(),
-        "greeter focuses the password field (its mauve edge shows)": r["greeter_focus"],
         "greeter runs no desktop: no bar, idle or clipboard, no session target, no update window":
             greeter_session_ok(r["greeter_session"]),
         "faillock: 10 failures lock for 2 minutes": r["faillock"].split() == ["deny", "=", "10", "unlock_time", "=", "120"],

@@ -23,8 +23,9 @@ Rectangle {
   // with the screen to 2 (a 4K screen at scale 1), so the form neither
   // shrinks to a strip on a large screen nor crowds a small one.
   readonly property real unit: Math.max(1, Math.min(2, width / 1280, height / 800))
-  // A small window (1280x800 at scale 1.5 and below) leaves out the clock.
-  readonly property bool compact: width < 640 || height < 560
+  // A small window (1280x800 at scale 1.5, 1280x720 at scale 1.25) leaves
+  // out the clock, so the form and a two-line message still fit unscrolled.
+  readonly property bool compact: width < 640 || height < 600
   property bool authenticating: false
   property bool startingSession: false
   property string message: ""
@@ -35,8 +36,11 @@ Rectangle {
   property bool afterPamText: false
   // SDDM reports Caps Lock only under X11; under Wayland the greeter works
   // it out from the letters typed (an upper-case letter without Shift).
+  // Until a letter was typed the state is unknown, and the Caps Lock key
+  // alone cannot say which way it went, so the tag stays hidden.
+  property bool capsKnown: false
   property bool capsGuess: false
-  readonly property bool capsLock: root.capsGuess || (typeof keyboard !== "undefined" && !!keyboard && keyboard.capsLock === true)
+  readonly property bool capsLock: (root.capsKnown && root.capsGuess) || (typeof keyboard !== "undefined" && !!keyboard && keyboard.capsLock === true)
 
   color: root.base
 
@@ -59,18 +63,24 @@ Rectangle {
   }
 
   // Escape: start the password again, without the last attempt's message.
-  function clear() {
+  // In the user field it puts back the last user and stays there.
+  function clear(item) {
     if (root.authenticating)
       return
-    password.text = ""
     root.message = ""
     root.pamLines = []
+    if (item === user) {
+      user.text = userModel.lastUser
+      return
+    }
+    password.text = ""
     password.forceActiveFocus()
   }
 
   function noteKey(event) {
     if (event.key === Qt.Key_CapsLock) {
-      root.capsGuess = !root.capsGuess
+      if (root.capsKnown)
+        root.capsGuess = !root.capsGuess
       return
     }
     const t = event.text
@@ -78,6 +88,7 @@ Rectangle {
       return
     const shift = (event.modifiers & Qt.ShiftModifier) !== 0
     root.capsGuess = (t === t.toUpperCase()) !== shift
+    root.capsKnown = true
   }
 
   function reveal(item) {
@@ -91,6 +102,7 @@ Rectangle {
   // The lock's clock rule: tick just after each minute, whatever the clock did.
   property date now: new Date()
   Timer {
+    objectName: "clockTimer"
     running: !root.compact
     repeat: true
     interval: 60050 - (Date.now() % 60000)
@@ -132,7 +144,7 @@ Rectangle {
       }
     }
     Keys.onPressed: event => root.noteKey(event)
-    Keys.onEscapePressed: root.clear()
+    Keys.onEscapePressed: root.clear(field)
     onActiveFocusChanged: { if (activeFocus) Qt.callLater(() => root.reveal(field)) }
   }
 
@@ -181,6 +193,7 @@ Rectangle {
         width: parent.width
         spacing: root.sp(4)
         Text {
+          objectName: "clockTime"
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
           text: ("0" + root.now.getHours()).slice(-2) + ":" + ("0" + root.now.getMinutes()).slice(-2)
@@ -330,9 +343,11 @@ Rectangle {
           Accessible.name: "Sign in"
           KeyNavigation.tab: user
           KeyNavigation.backtab: password
+          // Caps Lock pressed here still counts.
+          Keys.onPressed: event => root.noteKey(event)
           Keys.onReturnPressed: root.login()
           Keys.onEnterPressed: root.login()
-          Keys.onEscapePressed: root.clear()
+          Keys.onEscapePressed: root.clear(submit)
           contentItem: Text {
             text: root.startingSession ? "Starting desktop…" : root.authenticating ? "Signing in…" : "Sign in"
             horizontalAlignment: Text.AlignHCenter
@@ -351,21 +366,29 @@ Rectangle {
           onActiveFocusChanged: { if (activeFocus) Qt.callLater(() => root.reveal(submit)) }
         }
 
-        Row {
+        // Two lines stay free for the message (faillock's text takes two),
+        // so the form does not move when one appears or clears.
+        Item {
+          objectName: "messageSlot"
           width: parent.width
-          spacing: root.sp(10)
-          visible: root.message !== ""
-          Rectangle { width: Math.max(3, root.sp(3)); height: errorMessage.height; color: root.error }
-          Text {
-            id: errorMessage
-            objectName: "loginError"
-            width: parent.width - parent.spacing - Math.max(3, root.sp(3))
-            text: root.message
-            color: root.text
-            font.family: "sans-serif"
-            font.pixelSize: root.sp(14)
-            wrapMode: Text.WordWrap
-            Accessible.role: Accessible.AlertMessage
+          height: Math.max(twoLines.height, root.message === "" ? 0 : errorMessage.height)
+          Text { id: twoLines; visible: false; text: "A\nA"; font: errorMessage.font }
+          Row {
+            width: parent.width
+            spacing: root.sp(10)
+            visible: root.message !== ""
+            Rectangle { width: Math.max(3, root.sp(3)); height: errorMessage.height; color: root.error }
+            Text {
+              id: errorMessage
+              objectName: "loginError"
+              width: parent.width - parent.spacing - Math.max(3, root.sp(3))
+              text: root.message
+              color: root.text
+              font.family: "sans-serif"
+              font.pixelSize: root.sp(14)
+              wrapMode: Text.WordWrap
+              Accessible.role: Accessible.AlertMessage
+            }
           }
         }
       }

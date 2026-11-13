@@ -5,7 +5,6 @@ package calendar
 
 import (
 	"bufio"
-	"fmt"
 	"slices"
 	"sort"
 	"strconv"
@@ -126,9 +125,12 @@ type vevent struct {
 	exdates                     map[string]bool
 	recurrenceID                time.Time      // the occurrence this VEVENT replaces
 	loc                         *time.Location // the zone occurrences are reported in
+	bad                         bool           // a DTSTART or DTEND did not parse
 }
 
-// parseICS reads every VEVENT of an iCalendar text.
+// parseICS reads every VEVENT of an iCalendar text. An event without a UID
+// or a start, or with a DTSTART or DTEND that does not parse, is dropped so
+// one broken event does not cost the rest of the feed.
 func parseICS(text string, loc *time.Location) ([]vevent, error) {
 	var events []vevent
 	var cur *vevent
@@ -152,7 +154,7 @@ func parseICS(text string, loc *time.Location) ([]vevent, error) {
 			cur = &vevent{exdates: map[string]bool{}, loc: loc}
 			duration, hasDuration = 0, false
 		case p.name == "END" && strings.EqualFold(p.value, "VEVENT"):
-			if cur != nil && cur.uid != "" && !cur.start.IsZero() {
+			if cur != nil && cur.uid != "" && !cur.start.IsZero() && !cur.bad {
 				if cur.end.IsZero() {
 					if hasDuration {
 						cur.end = cur.start.Add(duration)
@@ -190,13 +192,15 @@ func parseICS(text string, loc *time.Location) ([]vevent, error) {
 		case p.name == "DTSTART":
 			t, allDay, err := parseTime(p, loc)
 			if err != nil {
-				return nil, fmt.Errorf("DTSTART %q: %w", p.value, err)
+				cur.bad = true
+				continue
 			}
 			cur.start, cur.allDay = t, allDay
 		case p.name == "DTEND":
 			t, _, err := parseTime(p, loc)
 			if err != nil {
-				return nil, fmt.Errorf("DTEND %q: %w", p.value, err)
+				cur.bad = true
+				continue
 			}
 			cur.end = t
 		case p.name == "DURATION":
@@ -352,13 +356,30 @@ func expand(e vevent, w Window) []time.Time {
 	}
 	switch rule["FREQ"] {
 	case "DAILY":
-		for t := e.start; emit(t); t = t.AddDate(0, 0, interval) {
+		// BYDAY filters the days (Thunderbird's "every weekday" is
+		// FREQ=DAILY;BYDAY=MO,...,FR); a skipped day does not count for COUNT.
+		for t := e.start; ; t = t.AddDate(0, 0, interval) {
+			if len(days) > 0 && !slices.Contains(days, t.Weekday()) {
+				if !t.Before(until) {
+					break
+				}
+				continue
+			}
+			if !emit(t) {
+				break
+			}
 		}
 	case "WEEKLY":
 		if len(days) == 0 {
 			days = []time.Weekday{e.start.Weekday()}
 		}
-		weekStart := e.start.AddDate(0, 0, -int(e.start.Weekday()))
+		// Weeks begin on WKST, Monday by default (RFC 5545); it matters
+		// when INTERVAL > 1 and BYDAY spans the week boundary.
+		wkst := time.Monday
+		if wd, ok := weekdays[rule["WKST"]]; ok {
+			wkst = wd
+		}
+		weekStart := e.start.AddDate(0, 0, -((int(e.start.Weekday()) - int(wkst) + 7) % 7))
 		for week := weekStart; ; week = week.AddDate(0, 0, 7*interval) {
 			done := false
 			for d := 0; d < 7; d++ {

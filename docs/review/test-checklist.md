@@ -20,7 +20,8 @@ and the acceptance table in [[first-install]].
 **What to test.** Main as of 2026-11-13 (`6b4c2fb` or later). Use either the
 ISO from Gitea's `iso` workflow (artifact `subarchy-iso`, kept for 2 days) or
 the stick the lead writes on Soyuz. Update the installed system with
-`subcult update` before the desktop sections.
+`subcult update` before the desktop sections. F7, D20 and C2 expect
+#183, #184 and #185 to have merged.
 
 **How to report a failure.** Note the item ID (for example I9), what you did,
 what happened instead, and a photo of the screen or the output of the command
@@ -113,7 +114,7 @@ Run the installer on tty1 with the dock unplugged, so Ethernet is off.
 - [ ] **F4** Boot the linux-lts entry once and run `dkms status`. *Expect:* it reaches the greeter, and the NVIDIA and evdi modules are built for both kernels.
 - [ ] **F5** Compare `uname -r` with L6. *Expect:* the installed linux-zen is the same as the live one or newer. If it is older, that is the known live-root mismatch (Q3).
 - [ ] **F6** (retest) Without touching the network, check it on first boot. *Expect:* the Wi-Fi joined in the installer connects by itself (the filmed install came up offline); dock Ethernet gets DHCP. (#149)
-- [ ] **F7** (retest) At the greeter, check the User field, the focus, and whether the bar shows. Press Super+1, Super+Space and Super+Return. *Expect:* the User field holds the account the installer made and the focus is on Password. No bar or desktop panels, the keys do nothing, and the form never disappears. From a TTY, `ps -u sddm -o comm` shows no quickshell. Known gap, not a failure: `systemctl --user -M sddm@ list-timers` lists the update-check and calendar-sync timers, because both units are enabled for every user (Q24). (#145, #164)
+- [ ] **F7** (retest) At the greeter, check the User field, the focus, and whether the bar shows. Press Super+1, Super+Space and Super+Return. *Expect:* the User field holds the account the installer made and the focus is on Password. No bar or desktop panels, the keys do nothing, and the form never disappears. From a TTY, `ps -u sddm -o comm` shows no quickshell. (new) `systemctl --user -M sddm@ list-timers` lists none of the `subcult-*` timers (#183). (#145, #164)
 - [ ] **F8** Sign in with the right password at the first try and time it. *Expect:* the bar appears within a few seconds, not after 14.5 s of empty blue. No "Hyprland updated to …" window or donation popup on this start or the next one. (#145)
 - [ ] **F9** (retest) Sign out. At the greeter, turn Caps Lock on and type a letter, then enter a wrong password 10 times. Wait 2 minutes and sign in. *Expect:* the Caps Lock tag appears; a wrong password shows "Checking…" then an error. After 10 failures it shows PAM's text, for example "The account is locked due to 10 failed logins. (2 minutes left to unlock)". After 2 minutes the right password works without a reboot. (#145, #147)
 - [ ] **F10** Look at the greeter beside the lock screen and the Plymouth prompt, at scale 1.6 and 2, and on a dock panel. Tab and Shift+Tab through the fields and press Escape in each. Repeat after `subcult theme apply-system` (T9). *Expect:* the SC mark is not doubled or offset; the "Subarchy" caption is centred; fields are labelled with visible focus; the layout matches the lock screen. Known gap: before apply-system the field border is violet #8B5CF6. Accept the look or list changes on #104. (#104, #148, #130)
@@ -174,7 +175,7 @@ Run the installer on tty1 with the dock unplugged, so Ethernet is off.
 
 ### Weather
 
-- [ ] **D20** Run `pacman -Q linecast`, then open the weather panel and search for a location. *Expect:* linecast is built but in no install list, so on main today `pacman -Q linecast` says it was not found. Current conditions still show (they come from Open-Meteo); the forecast part shows "linecast gave no forecast (is it installed?)" and search shows "linecast did not answer (is it installed?)". That is the known gap Q23, not a new failure. If linecast is installed, the forecast shows and search finds the place.
+- [ ] **D20** (new) Run `pacman -Q linecast`, then open the weather panel and search for a location. *Expect:* linecast is installed; current conditions and the forecast show, and search finds the place. (#184)
 
 ### Keyboard layout, tray, display
 
@@ -246,7 +247,7 @@ Run the installer on tty1 with the dock unplugged, so Ethernet is off.
 - [ ] **A2** Using only the Bluetooth panel: right-click the widget to toggle the adapter. Then search, choose "Pair and trust" on a device that is not yet paired, and confirm any PIN in the panel. Cancel one pairing, and right-click a device to forget it. *Expect:* each step works without `bluetoothctl`, and the device connects and plays. (#105)
 - [ ] **A3** Play over Bluetooth, suspend, resume; then turn the device off and on. *Expect:* it reconnects by itself and audio continues.
 - [ ] **A4** (new) Connect the HT3. Open its panel and compare battery and noise mode with the headphones; change mode on the headphones. Close the panel and run `pgrep -af 'ht3 watch'`. Reopen it while the TOZO app holds the headphones on a phone. Take the address from `bluetoothctl devices | grep -i HT3` and run `subcult ht3 status <that address> --json`. *Expect:* the widget shows only while the HT3 is connected, and only when its Bluetooth name contains both "HT3" and "TOZO" in any case (`bluetoothctl info <address>` shows the name; if it lacks either word, the widget stays hidden by design); readings match and follow within 30 s; the helper has exited; with the app connected the panel says the headphones refused the control channel; the CLI reads once. (#65, #150)
-- [ ] **A5** (new) Only once PR #181 has merged: in the HT3 panel, switch Normal, ANC and Transparency, and move the volume bar to the top. *Expect:* each change is audible and shows only after the headphones confirm it; volume moves only the HT3, stops at 100%, and leaves the default output alone. (#153, #181)
+- [ ] **A5** (new) In the HT3 panel, switch Normal, ANC and Transparency, and move the volume bar to the top. *Expect:* each change is audible and shows only after the headphones confirm it; volume moves only the HT3, stops at 100%, and leaves the default output alone. (#153, #181)
 
 ## 9 Network, Wi-Fi, Tailscale, Taildrop, LocalSend
 
@@ -274,7 +275,7 @@ Run the installer on tty1 with the dock unplugged, so Ethernet is off.
 ## 11 subcult commands, update, channel, snapshots
 
 - [ ] **C1** Run `subcult --help`, `subcult --version`, `subcult commands`, `subcult commands --json --all` and `sub commands`; press Tab after `subcult ` in zsh and bash. *Expect:* every route listed with a summary; `sub` is an alias; completion offers groups and actions.
-- [ ] **C2** Run `subcult theme list` and `subcult theme set subcult-minimal`, as the site docs show. *Expect:* an unknown-command error: only `theme apply-system` exists (Q17).
+- [ ] **C2** (new) Run the theme commands the site's docs page shows: `pult apply catppuccin-mocha`, `pult apply -profile /usr/share/subcult/default/theme/subarchy.toml`, `subcult theme apply-system` and `subcult cursor apply`. *Expect:* each command exists and does what the page says; none gives an unknown-command error. (#185)
 - [ ] **C3** On the old install, before reinstalling: run `subcult update`, then check `rd.luks.options` in `/etc/kernel/cmdline` and `KERNEL_CMDLINE` in `/etc/default/limine`. Run the update again, then reboot. *Expect:* `,tries=0` is added once to each; the second run changes nothing; the passphrase prompt asks without limit. (#144, migrations/1794532900.sh)
 - [ ] **C4** On the old install: run `subcult update migrate` twice and list `~/.config/subcult/theme/`. *Expect:* the subarchy-shell and subarchy-hyprland target files appear for the active theme; the second run does nothing. (#122)
 - [ ] **C5** (retest) When a new core package is published, run `subcult update --dry-run`, then `subcult update`, then `hyprctl binds | wc -l`. *Expect:* one password prompt at the start and no second one. No red Hyprland banner about `default/hypr/bootstrap.lua`. Hyprland reloads at the end with about 52 binds, scale keys included. The update count drops to the true remainder. A kernel change gives a reboot notice. When an upgraded package's files are still in use, the summary ends with "Services using replaced files: … Restart them, or reboot.", user services marked "(user)", and nothing is restarted for you. fwupd's "nothing to do" is not a failure. (#109, ADR 0069, #161, Gitea #139)
@@ -294,7 +295,8 @@ Run the installer on tty1 with the dock unplugged, so Ethernet is off.
 
 ## 13 Decisions for the owner
 
-Each one needs an answer, recorded on the issue or ADR named.
+Each one needs an answer, recorded on the issue or ADR named. IDs stay
+stable: Q17, Q23 and Q24 were settled by #185, #184 and #183.
 
 - [ ] **Q1** (decision) Secure Boot key custody and recovery, and the TPM PCR policy and recovery, before F12 and F13. (ADR 0010, ADR 0012, #51)
 - [ ] **Q2** (decision) Rename the firmware entries from "Limine" to "Subarchy", and keep or drop Omarchy's entry. (#140)
@@ -302,24 +304,21 @@ Each one needs an answer, recorded on the issue or ADR named.
 - [ ] **Q4** (decision) Installer: offer to unlock a LUKS partition read-only while browsing; support installing beside another OS (reuse its EFI partition or add one, minimum free space, Limine chainload; changes ADR 0009); keep the visible 2 s boot menu with a beep and the static mark. (#124, #143)
 - [ ] **Q5** (decision) If I13 or I14 look faint by eye: pad the focused button, or draw the progress track in a muted colour.
 - [ ] **Q6** (decision) The 1.5 s of black before the shutdown splash, and whether to hide its progress bar; a sign once the lock's password passes 16 characters.
-- [ ] **Q7** (decision) HT3 panel controls: noise mode, HT3-only volume, EQ. PR #181 has the first two. (#153)
+- [ ] **Q7** (decision) HT3 panel controls: noise mode, HT3-only volume, EQ. #181 added the first two; EQ is left. (#153)
 - [ ] **Q8** (decision) Confirm or change the Tailscale policy (active session connects, signs in, picks exit nodes and sends files without a password) and the starting list of actions that skip sudo or polkit. (ADR 0062)
 - [ ] **Q9** (decision) Ship a screenshot key; bind or autostart voxtype dictation. (ADR 0056)
 - [ ] **Q10** (decision) Default apps: ship `/etc/xdg/mimeapps.list` or run `subcult app default` at install; vendor or unmark the six missing "preinstalled" apps; add CUPS per ADR 0022 or change the ADR; the 1010-package budget. (#168, #172, ADR 0054)
 - [ ] **Q11** (decision) Finish the app list review: overlaps (Bitwarden CLI and Proton Pass, browsers, PDF, archive), sputnik apps left out, more web apps, chatgpt-desktop. Then set [[app-list]] to `review: done`. (ADR 0044)
-- [ ] **Q12** (decision) Cursor colour: the palette's #FFFFFF or Subcult Ink kitty's #00FF88, and whether Subcult Ink stays a separate scheme. (#4)
+- [ ] **Q12** (decision) Cursor colour: kitty's Subcult Ink cursor now uses the palette's #FFFFFF (#173). Confirm it or ask for #00FF88, and say whether Subcult Ink stays a separate scheme. (#4)
 - [ ] **Q13** (decision) Sign a Pult release with pult#34 so Dolphin follows catalog themes, and bump `packaging/pult`. (#77)
 - [ ] **Q14** (decision) Approve the 25 upscaled wallpapers in `~/Pictures/subcult-wallpapers-4k/` and decide on the other 84. (ADR 0038)
 - [ ] **Q15** (decision) Switch the installer, boot, greeter and lock from the SUBCULT mark to the Subarchy identity; where `Documentation=`, polkit `vendor_url` and PKGBUILD `url=` should point. (ADR 0052, #178)
 - [ ] **Q16** (decision) Restic backup target: a repository on Dozor over SFTP. (ADR 0060)
-- [ ] **Q17** (decision) Fix the site docs or add `subcult theme list` and `theme set` (C2).
 - [ ] **Q18** (decision) Build a factory-reset command with a keep-home mode. (ADR 0056)
 - [ ] **Q19** (decision) Signing key: confirm the second copy exists and whether a rotation procedure is wanted, then update ADR 0025. (#87)
 - [ ] **Q20** (decision) Licence gate: SUBCULT assets under `ASSETS_LICENSE.md`, origin headers on borrowed files, redistribution of displaylink and nvidia-580xx. (ADR 0053, #84)
 - [ ] **Q21** (decision) After the #51 results are in: review the release notes' tested-hardware list and tag the first release on stable. (ADR 0066, #84)
 - [ ] **Q22** (decision) The black gap before the Plymouth prompt (F2): once F2 shows the cause, choose a fix, for example leaving the NVIDIA modules out of the initrd or booting with `plymouth.use-simpledrm`. No issue tracks it yet.
-- [ ] **Q23** (decision) linecast is packaged but in no install list, so the weather panel has no forecast or location search (D20): add it to `install/packages/desktop.txt`, or drop those parts for the first release.
-- [ ] **Q24** (decision) The update-check and calendar-sync timers are enabled for every user, so they also run in the greeter's sddm session (F7): limit them to real users, or accept it.
 - [ ] **Q25** (decision) Whether captive-portal sign-in (ADR 0020's exception, not built) must work for the first release (N2).
 
 ## 14 Other hardware (optional)

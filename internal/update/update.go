@@ -2,6 +2,7 @@ package update
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -75,6 +76,10 @@ type Report struct {
 	// HyprlandReloaded: configuration changes deferred during the update
 	// were loaded after the replacement files were in place.
 	HyprlandReloaded bool
+	// FirmwareUpdated: fwupdmgr installed updates under --yes, where
+	// --no-reboot-check hides its own notice that staged updates wait for
+	// a reboot.
+	FirmwareUpdated bool
 	// ServicesToRestart still run files the upgrade replaced; "(user)"
 	// marks user services. Nothing restarts them.
 	ServicesToRestart []string
@@ -90,9 +95,17 @@ func (u *Updater) pkgVersion(ctx context.Context, name string) string {
 	return strings.TrimSpace(out)
 }
 
+// MigrationError is a failed migration. Run returns it after the remaining
+// steps have run, so the Report beside it is complete and worth showing.
+type MigrationError struct{ Err error }
+
+func (e *MigrationError) Error() string { return e.Err.Error() }
+func (e *MigrationError) Unwrap() error { return e.Err }
+
 // Run performs the update. A failure in the snapshot or package step stops
 // the run; later steps report problems without stopping. A failed migration
-// is returned as the command's error after the remaining steps have run.
+// is returned as a *MigrationError after the remaining steps have run. An
+// interrupt (a cancelled ctx) by the end of the migrations stops the run.
 func (u *Updater) Run(ctx context.Context) (Report, error) {
 	var rep Report
 	say := func(format string, args ...any) { fmt.Fprintf(u.O.Stdout, ">> "+format+"\n", args...) }
@@ -143,6 +156,10 @@ func (u *Updater) Run(ctx context.Context) (Report, error) {
 	say("running migrations")
 	ran, migErr := u.O.Migrations.Run(ctx, u.R)
 	rep.Migrations = ran
+	if err := ctx.Err(); err != nil {
+		// The user asked to stop: every later step would fail at once.
+		return rep, cmp.Or(migErr, err)
+	}
 
 	optional := []struct {
 		tool, what string
@@ -165,7 +182,11 @@ func (u *Updater) Run(ctx context.Context) (Report, error) {
 			// Never prompt, and never reboot in the middle of the update.
 			argv = append(argv, "--assume-yes", "--no-reboot-check")
 		}
-		if err := u.R.Run(ctx, argv...); err != nil {
+		err := u.R.Run(ctx, argv...)
+		if err == nil && u.O.Yes && o.tool == "fwupdmgr" {
+			rep.FirmwareUpdated = true
+		}
+		if err != nil {
 			// fwupdmgr exits 2 when there is nothing to do: no updatable
 			// devices or no updates available.
 			var ec interface{ ExitCode() int }
@@ -238,7 +259,10 @@ func (u *Updater) Run(ctx context.Context) (Report, error) {
 		rep.RunningKernel = strings.TrimSpace(running)
 		rep.RebootNeeded = RebootNeeded(u.O.ModulesDir, rep.RunningKernel)
 	}
-	return rep, migErr
+	if migErr != nil {
+		return rep, &MigrationError{migErr}
+	}
+	return rep, nil
 }
 
 // cleanup offers to remove orphaned packages and prunes the package cache.
@@ -360,9 +384,12 @@ func (r Report) Summary() string {
 	if len(r.ServicesToRestart) > 0 {
 		fmt.Fprintf(&b, "Services using replaced files: %s. Restart them, or reboot.\n", strings.Join(r.ServicesToRestart, ", "))
 	}
+	if r.FirmwareUpdated {
+		b.WriteString("Firmware was updated. Staged firmware updates apply at the next reboot.\n")
+	}
 	if r.RebootNeeded {
 		fmt.Fprintf(&b, "Reboot needed: the running kernel %s was upgraded.\n", r.RunningKernel)
-	} else {
+	} else if !r.FirmwareUpdated {
 		b.WriteString("No reboot needed.\n")
 	}
 	return b.String()

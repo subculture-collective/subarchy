@@ -113,10 +113,12 @@ delays stable updates rather than breaking them.
   allows without a password (ADR 0062). The bar indicator, channels and
   restart detection remain.
 - 2026-11-13: only the snapshot and package steps stop `subcult update`.
-  A failed DKMS query is a warning, and a failed migration is reported as
-  the command's error after the reload, restarts and report have run, since
-  the packages are already replaced. fwupd's "nothing to do" (exit 2) is
-  not reported as a failure, and `--yes` passes fwupd `--assume-yes
-  --no-reboot-check`.
+  A failed DKMS query is a warning. After a failed migration the reload,
+  restarts and indicator refresh still run and the report is printed,
+  since the packages are already replaced; the command then exits 1. An
+  interrupt during the DKMS check or the migrations stops the run there.
+  fwupd's "nothing to do" (exit 2) is not reported as a failure, and
+  `--yes` passes fwupd `--assume-yes --no-reboot-check`; the report then
+  says that staged firmware updates apply at the next reboot.
 
 Related: [[decision-map|Decision map]] · [[0025-package-repository|ADR 0025]] · [[0011-snapshots|ADR 0011]]

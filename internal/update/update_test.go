@@ -369,11 +369,96 @@ func TestMigrationFailureStillRestarts(t *testing.T) {
 	}
 	f.fail["bash -euo pipefail "+script] = true
 	rep, err := u.Run(context.Background())
-	if err == nil {
-		t.Fatal("a failed migration returned no error")
+	var migErr *MigrationError
+	if !errors.As(err, &migErr) {
+		t.Fatalf("a failed migration returned %v, want a *MigrationError", err)
 	}
 	if !slices.Contains(f.ran, "hyprctl reload") || !slices.Contains(f.ran, shellRestart) || !rep.ShellRestarted {
 		t.Errorf("ran %q, report %+v", f.ran, rep)
+	}
+}
+
+// cancelOn cancels the run's context when a command starting with prefix
+// runs, as a Ctrl+C in the middle of that step would.
+type cancelOn struct {
+	*fake
+	prefix string
+	cancel context.CancelFunc
+}
+
+func (c cancelOn) Run(ctx context.Context, argv ...string) error {
+	if strings.HasPrefix(strings.Join(argv, " "), c.prefix) {
+		c.cancel()
+	}
+	return c.fake.Run(ctx, argv...)
+}
+
+// An interrupt during the migrations stops the run there, instead of
+// failing every later step with a "(continuing)" line.
+func TestInterruptDuringMigrationStops(t *testing.T) {
+	f := &fake{
+		tools:   map[string]bool{"fwupdmgr": true, "yay": true, "mise": true, "paccache": true, "hyprctl": true},
+		outputs: map[string]string{"hyprctl -j getoption misc:disable_autoreload": `{"bool":false}`},
+		series:  map[string][]string{"pacman -Q subarchy": {"subarchy 0.1.0-1", "subarchy 0.2.0-1"}},
+	}
+	u, out := newUpdater(t, f, true)
+	u.O.HyprlandSession = true
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u.R = cancelOn{fake: f, prefix: "bash -euo pipefail", cancel: cancel}
+	if err := os.WriteFile(filepath.Join(u.O.Migrations.Dir, "1794256000.sh"), []byte("true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := u.Run(ctx)
+	var migErr *MigrationError
+	if !errors.Is(err, context.Canceled) || errors.As(err, &migErr) {
+		t.Fatalf("err = %v, want the cancellation", err)
+	}
+	for _, step := range []string{"fwupdmgr", "yay", "mise", "sudo /usr/bin/subcult-update privileged prune", "hyprctl reload", "systemctl"} {
+		for _, ran := range f.ran {
+			if strings.HasPrefix(ran, step) {
+				t.Errorf("ran %q after the interrupt", ran)
+			}
+		}
+	}
+	if strings.Contains(out.String(), "(continuing)") {
+		t.Errorf("out = %q", out)
+	}
+	// The watcher is still restored, outside the cancelled context.
+	if !slices.Contains(f.ran, "hyprctl eval hl.config({ misc = { disable_autoreload = false } })") {
+		t.Errorf("auto-reload not restored: %q", f.ran)
+	}
+}
+
+// fwupdmgr's reboot notice is off under --yes, so the report says it.
+func TestFirmwareUpdateReportsReboot(t *testing.T) {
+	for _, tt := range []struct {
+		yes  bool
+		want bool
+	}{{true, true}, {false, false}} {
+		f := &fake{tools: map[string]bool{"fwupdmgr": true}}
+		u, _ := newUpdater(t, f, tt.yes)
+		rep, err := u.Run(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rep.FirmwareUpdated != tt.want {
+			t.Errorf("yes=%v: FirmwareUpdated = %v", tt.yes, rep.FirmwareUpdated)
+		}
+		summary := rep.Summary()
+		if strings.Contains(summary, "Staged firmware updates apply at the next reboot.") != tt.want ||
+			strings.Contains(summary, "No reboot needed.") == tt.want {
+			t.Errorf("yes=%v: summary %q", tt.yes, summary)
+		}
+	}
+	// Nothing to do (exit 2) reports no firmware update.
+	f := &fake{
+		tools: map[string]bool{"fwupdmgr": true},
+		errs:  map[string]error{fwupdYes: exitCode(2)},
+	}
+	u, _ := newUpdater(t, f, true)
+	if rep, err := u.Run(context.Background()); err != nil || rep.FirmwareUpdated {
+		t.Errorf("nothing to do: %+v, %v", rep, err)
 	}
 }
 

@@ -4,7 +4,7 @@ type: decision
 status: accepted
 adr: 49
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-12
 tags: [decision, adr, delivery]
 aliases: [ADR 0049, R2, Installer, ISO]
 ---
@@ -115,5 +115,12 @@ Decision map item R2. Accepted 2026-11-06.
   as a substring, and the summary shows each secret as "set (hidden)".
   Before a reboot or power-off the installer restores the console's
   palette and lowers the kernel's console log level.
+- 2026-11-12: before the read-only browse opens, a page lists the
+  partitions it opened, the ones it left closed and why, and how to come
+  back: q, or Esc then 0, since F10 is a media key on many laptops. `mc`
+  opens both panels on the disk and runs with no subshell and no command
+  line, and the disk is mounted `noexec`, so typed text and Return on a
+  file do not run anything. Its pull-down menus can still run a command
+  typed into their dialogs.
 
 Related: [[decision-map|Decision map]] · [[0050-hardware-support|ADR 0050]]

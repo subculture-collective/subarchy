@@ -706,6 +706,26 @@ def boot(disk: Path, vars_file: Path) -> bool:
                 "systemctl is-enabled tailscaled; systemctl is-active tailscaled;"
                 " tailscale status 2>&1 | grep -ci 'logged out'; tailscale version | head -1"
             ),
+            # The installed user is tailscaled's operator (ADR 0058): the
+            # first-boot unit ran once and left its marker, and the user can
+            # turn Tailscale off without sudo (signed out, that changes
+            # nothing). The Taildrop receiver starts with every session.
+            "tailscale_operator": serial.run(
+                f"systemctl is-enabled subcult-tailscale-operator@{USER}.service;"
+                f" for _ in $(seq 30); do test -e /var/lib/subcult/tailscale-operator-{USER} && break; sleep 1; done;"
+                f" test -e /var/lib/subcult/tailscale-operator-{USER} && echo MARKER;"
+                f" {sudo} tailscale debug prefs | grep -c '\"OperatorUser\": \"{USER}\"';"
+                " tailscale down >/dev/null 2>&1 && echo USER_CONTROLS || echo USER_DENIED;"
+                " systemctl --user show -p WantedBy --value subcult-tailscale-receive.service | grep -c graphical-session.target"
+            ),
+            # lazydocker through polkit (ADR 0055): the action names the
+            # root side and keeps the password a while; the launcher entry
+            # starts `subcult docker tui`.
+            "docker_tui": serial.run(
+                "pkaction --verbose --action-id tv.subcult.docker.tui | grep -E 'implicit active|exec.path' | tr -s ' ';"
+                " test -x /usr/lib/subcult/lazydocker-root && echo ROOT_SIDE;"
+                " grep -c '^Exec=subcult-docker-tui$' /usr/share/applications/subcult-lazydocker.desktop"
+            ),
             # One command from each group of install/packages/cli.txt.
             "cli_tools": serial.run(
                 "for c in curl rsync 7z bat eza rg fzf zoxide jq yq tldr starship atuin btop yazi lazygit lazydocker tmux"
@@ -869,6 +889,8 @@ def boot(disk: Path, vars_file: Path) -> bool:
             " | grep -vE 'Failed to (connect|create) pipewire context|MESA|ZINK'"
             " | grep -E 'ERROR|TypeError|ReferenceError|is not a type|Cannot assign' | head -5")
         results["layers"] = serial.run("hyprctl -i 0 layers | grep -c 'namespace: subcult-bar'")
+        # Signed out, the Taildrop receiver waits between tries (ADR 0058).
+        results["taildrop"] = serial.run("systemctl --user is-active subcult-tailscale-receive.service")
         # Exercise the generated commands twice from each state. Merely
         # accepting dispatch is insufficient: an unknown Lua field toggles.
         dpms_probe = r"""
@@ -1108,6 +1130,9 @@ finally:
         "docker starts on demand, needs sudo, and is behind ufw": r["docker"].split()
         == ["enabled", "disabled", "inactive", "0", "USER_CANNOT", "SUDO_CAN", "active", "1", "COMPOSE", "BUILDX"],
         "tailscale is installed and running, signed out": r["tailscale"].split()[:3] == ["enabled", "active", "1"],
+        "the user is tailscaled's operator, set once at first boot; Taildrop receiver in the session":
+            r["tailscale_operator"].split() == ["enabled", "MARKER", "1", "USER_CONTROLS", "1"],
+        "lazydocker reaches Docker through its polkit action": docker_tui_ok(r["docker_tui"]),
         "command-line and terminal apps installed": "CLI_DONE" in r["cli_tools"] and "missing:" not in r["cli_tools"],
         "voxtype, LocalSend and the Proton apps installed": "APPS_DONE" in r["desktop_apps"]
         and "missing:" not in r["desktop_apps"],
@@ -1149,6 +1174,7 @@ finally:
         "shell service active": "ACTIVE" in r["shell_active"],
         "shell log has no QML errors": r["shell_errors"].strip() == "",
         "one bar layer per monitor": r["layers"].strip() == "1",
+        "Taildrop receiver runs in the session": r["taildrop"].strip() == "active",
         "full bar with widgets": '"subcult.clock"' in r["shell_status"] and '"subcult.menu"' in r["shell_status"],
         "HT3 widget loaded and hidden without headphones": widget_hidden(r["shell_status"], "subcult.ht3"),
         "bar colours (base, line, text)": {"100B19", "1F1830", "F0ECE4"} <= r["bar_colours"],
@@ -1415,6 +1441,13 @@ def hw_ok(out: str) -> bool:
     wanted = {"GenuineIntel": {"intel-ucode", "thermald"}, "AuthenticAMD": {"amd-ucode"}}.get(vendor.group(1) if vendor else "")
     installed = {w for w in out.split() if w in ("intel-ucode", "amd-ucode", "thermald")}
     return wanted is not None and installed == wanted and "linux-firmware" not in out and "VM:        QEMU" in out
+
+
+def docker_tui_ok(out: str) -> bool:
+    """pkaction's lines for tv.subcult.docker.tui, the root side, the entry."""
+    return ("implicit active: auth_admin_keep" in out
+            and "org.freedesktop.policykit.exec.path -> /usr/lib/subcult/lazydocker-root" in out
+            and out.split()[-2:] == ["ROOT_SIDE", "1"])
 
 
 def theme_system_ok(out: str) -> bool:

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# subcult:summary=Save files sent to this machine with Taildrop to Downloads
+# subcult:args=[--once] [directory]
+# subcult:examples=subcult tailscale receive --once | subcult tailscale receive ~/Desktop
+#
+# ADR 0058. The user unit subcult-tailscale-receive.service runs this for
+# the session. `tailscale file get --wait` sleeps until files arrive, then
+# they are moved into Downloads (a taken name gets -1, -2 ...) and each is
+# announced. Taildrop needs a signed-in tailscaled and this user as its
+# operator; until then this waits five minutes between tries, and the bar's
+# Tailscale panel restarts the unit when it sees the sign-in.
+set -euo pipefail
+
+once=0
+if [[ ${1:-} == --once ]]; then
+  once=1
+  shift
+fi
+dir=${1:-${XDG_DOWNLOAD_DIR:-$HOME/Downloads}}
+# Files land in a staging folder next to the destination first: a delivery
+# can take hours, and only finished files belong in Downloads. Same
+# filesystem, so the move is a rename.
+staging=$dir/.taildrop
+retry=${SUBCULT_TAILDROP_RETRY:-300}
+mkdir -p "$staging"
+
+# claim FILE: hard-link the staged file to a free name in $dir, then drop
+# the staged name. link(2) fails on a taken name, so nothing is overwritten
+# even when another program writes to Downloads at the same time. Prints
+# the path it took.
+claim() {
+  local staged=$1 name base ext target i
+  name=${staged##*/}
+  base=${name%.*}
+  ext=${name:${#base}}
+  [[ -n $base ]] || { base=$name ext=; }
+  for ((i = 0; i < 1000; i++)); do
+    target=$dir/$name
+    ((i == 0)) || target=$dir/$base-$i$ext
+    if ln -- "$staged" "$target" 2>/dev/null; then
+      rm -f -- "$staged"
+      printf '%s\n' "$target"
+      return 0
+    fi
+    [[ -e $target ]] || return 1
+  done
+  return 1
+}
+
+announce() {
+  local path=$1 shown
+  shown=${dir/#"$HOME"/"~"}
+  notify-send -a Taildrop -i folder-download -- "Received ${path##*/}" "Saved to $shown" || true
+}
+
+deliver() {
+  local staged target
+  while IFS= read -r -d '' staged; do
+    target=$(claim "$staged") || continue
+    announce "$target"
+  done < <(find "$staging" -mindepth 1 -maxdepth 1 -type f -print0)
+}
+
+# Files a stopped run left in staging come first.
+deliver
+last=
+while true; do
+  if err=$(tailscale file get --wait --conflict=rename "$staging" 2>&1 >/dev/null); then
+    last=
+    deliver
+    ((once)) && exit 0
+    continue
+  fi
+  # The same refusal every few minutes (signed out) is logged once.
+  [[ $err == "$last" ]] || echo "subcult tailscale receive: $err" >&2
+  last=$err
+  ((once)) && exit 1
+  sleep "$retry" &
+  wait $!
+done

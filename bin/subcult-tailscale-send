@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# subcult:summary=Send files to a machine on your tailnet with Taildrop
+# subcult:args=<machine> [file...]
+# subcult:examples=subcult tailscale send kvant | subcult tailscale send kvant ~/notes.pdf
+#
+# ADR 0058. Without files a file picker opens (the desktop portal's). The
+# result is a notification, so the bar's Tailscale panel can start this and
+# close. The machine is a name or address `tailscale file cp-targets` lists.
+set -euo pipefail
+
+die() { echo "subcult tailscale send: $*" >&2; exit 1; }
+chooser=${SUBCULT_FILE_CHOOSER:-/usr/lib/subcult/file-chooser}
+
+(($# >= 1)) || die "usage: subcult tailscale send <machine> [file...]"
+machine=$1
+shift
+# A MagicDNS name reads better by its first label.
+name=${machine%%.*}
+[[ $machine =~ ^[0-9.]+$|: ]] && name=$machine
+
+files=("$@")
+if ((${#files[@]} == 0)); then
+  status=0
+  picked=$("$chooser" --title "Send to $name" --multiple) || status=$?
+  # 1: the picker was closed without a choice.
+  ((status == 1)) && exit 0
+  if ((status != 0)); then
+    notify-send -a Taildrop -u critical -i dialog-error -- "Nothing sent to $name" "The file picker did not open" || true
+    exit 1
+  fi
+  mapfile -t files <<<"$picked"
+  [[ -n ${files[0]:-} ]] || exit 0
+fi
+
+if ((${#files[@]} == 1)); then
+  what=${files[0]##*/}
+else
+  what="${#files[@]} files"
+fi
+
+if err=$(tailscale file cp --update-interval=0 -- "${files[@]}" "$machine:" 2>&1); then
+  notify-send -a Taildrop -i document-send -- "Sent to $name" "$what" || true
+else
+  err=$(grep -v '^$' <<<"$err" | head -1)
+  notify-send -a Taildrop -u critical -i dialog-error -- "Nothing sent to $name" "${err:-tailscale file cp failed}" || true
+  echo "subcult tailscale send: ${err:-tailscale file cp failed}" >&2
+  exit 1
+fi

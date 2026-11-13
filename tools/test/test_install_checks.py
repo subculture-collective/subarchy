@@ -262,6 +262,22 @@ class ThemeSystem(unittest.TestCase):
         self.assertFalse(install_test.theme_system_ok(theme_probe("2\n0", exit_code=1)))
 
 
+class DockerTui(unittest.TestCase):
+    # pkaction --verbose, as checked with polkit 126 (2026-11-13), then the
+    # root side and the desktop entry.
+    PKACTION = (" implicit active: auth_admin_keep\n"
+                " annotation: org.freedesktop.policykit.exec.path -> /usr/lib/subcult/lazydocker-root\n")
+
+    def test_the_action_root_side_and_entry_pass(self):
+        self.assertTrue(install_test.docker_tui_ok(self.PKACTION + "ROOT_SIDE\n1\n"))
+
+    def test_a_missing_part_fails(self):
+        self.assertFalse(install_test.docker_tui_ok("ROOT_SIDE\n1\n"))
+        self.assertFalse(install_test.docker_tui_ok(self.PKACTION + "1\n"))
+        self.assertFalse(install_test.docker_tui_ok(self.PKACTION.replace("_keep", "") + "ROOT_SIDE\n1\n"))
+        self.assertFalse(install_test.docker_tui_ok(self.PKACTION + "ROOT_SIDE\n0\n"))
+
+
 class GreeterSession(unittest.TestCase):
     def test_nothing_of_the_desktop_for_sddm_passes(self):
         ok = "PROCS=0\nUPDATE=0\nMANAGER=active\nTARGET=inactive inactive \n"

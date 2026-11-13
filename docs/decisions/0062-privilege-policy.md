@@ -4,7 +4,7 @@ type: decision
 status: accepted
 adr: 62
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-13
 tags: [decision, adr, security]
 aliases: [ADR 0062, sudo, polkit]
 ---
@@ -41,6 +41,11 @@ list to the agent (2026-11-07); the list above is that starting list.
   program (`/usr/bin/subcult-theme`), which takes only colours as arguments.
   It asks for an administrator's password (`auth_admin_keep`), as the
   default above says; it is not on the password-free list.
+- `tv.subcult.docker.tui` (2026-11-13, [[0055-containers|ADR 0055]]):
+  lazydocker as root through pkexec while the user is not in the `docker`
+  group; the action names `/usr/lib/subcult/lazydocker-root`, which takes
+  only the terminal type. `auth_admin_keep`, not password-free: driving
+  Docker is root access.
 
 ## Borrowed from Omarchy
 

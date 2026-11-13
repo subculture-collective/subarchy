@@ -103,18 +103,10 @@ function tooltip(status, daemonDown) {
     + (status.exitNode ? "\nExit node: " + status.exitNode.name : "")
 }
 
-// The sign-in link in a line `tailscale up` prints, or "".
+// The sign-in link in a line the helper's `login` prints, or "".
 function loginUrl(line) {
   const m = /https:\/\/\S+/.exec(String(line || ""))
   return m ? m[0] : ""
-}
-
-// tailscaled refused the user: they are not its operator. Signed out,
-// `tailscale up` run by someone other than the operator can instead fail
-// with "requires mentioning all non-default flags" and suggest
-// `tailscale up --operator=<the operator>`.
-function needsOperator(text) {
-  return /Access denied|--operator=/i.test(String(text || ""))
 }
 
 // No tailscaled to talk to.
@@ -132,18 +124,26 @@ function errorText(text) {
 }
 
 // How to reach a peer: its IPv4 address, else its IPv6 address, else its
-// MagicDNS name. tailscale matches an address whatever the peer is called.
+// MagicDNS name. An address matches whatever the peer is called; the
+// helper takes only addresses.
 function address(p) {
   return p.ip || p.ipv6 || p.dnsName
 }
 
+// Changes go through the root helper under the polkit action
+// tv.subcult.tailscale (no password in the active session): no account is
+// tailscaled's operator (ADR 0062). Reading the status needs no rights.
+const HELPER = "/usr/lib/subcult/tailscale-helper"
+
+function helperCommand(verb, args) {
+  return ["pkexec", HELPER, verb].concat(args || [])
+}
+
 // The argv that makes a peer the exit node, or clears it (peer null). The
-// local network (router, printers, machines at home) stays reachable while
-// other traffic goes through the exit node.
+// helper keeps the local network (router, printers, machines at home)
+// reachable while other traffic goes through the exit node.
 function exitNodeCommand(p) {
-  if (!p)
-    return ["tailscale", "set", "--exit-node="]
-  return ["tailscale", "set", "--exit-node=" + address(p), "--exit-node-allow-lan-access=true"]
+  return helperCommand("exit-node", [p ? address(p) : ""])
 }
 
 // The argv that sends files to a peer: by address, named in the

@@ -46,29 +46,31 @@ list to the agent (2026-11-07); the list above is that starting list.
   group; the action names `/usr/lib/subcult/lazydocker-root`, which takes
   only the terminal type. `auth_admin_keep`, not password-free: driving
   Docker is root access.
-- Tailscale operator (2026-11-13, [[0058-tailscale|ADR 0058]]): the
-  installed user is tailscaled's operator, set at first boot by
-  `subcult-tailscale-operator@<user>.service` and on older installs by a
-  migration (one sudo prompt during `subcult update`). A user added later
-  gets an "Allow this account" button in the bar's Tailscale panel, which
-  runs `pkexec tailscale set --operator=$USER` under polkit's generic
-  `org.freedesktop.policykit.exec` action (an administrator's password).
-  The panel needs this for on/off, sign-in and the exit node, and the
-  Taildrop receiver for `tailscale file get`. **It grants more than that.**
-  The operator can change every tailscaled setting without a password,
-  including turning on Tailscale SSH (`tailscale set --ssh`), advertising
-  routes or an exit node, and `tailscale serve`; checked with tailscale
-  1.104.7 in a container. Tailscale SSH runs as root and admits whoever
-  the tailnet's SSH policy allows. Tailscale's default policy lets the
-  owner's own devices in as root after a browser check, so any program
-  running as the user can reach root that way without the local password.
-  Tailscale 1.104 has no system policy that turns Tailscale SSH off
-  (`/etc/tailscale/syspolicy.json` rejects such a key). tailscaled has one
-  operator: allowing a second account takes the role from the first; the
-  boot unit and the migration leave another account's role in place. The
-  narrower alternative, not built: a root helper under a polkit action that
-  runs only `tailscale up`, `down` and `set --exit-node=<address>`, plus a
-  system-side Taildrop receiver. **Owner decision pending** (PR #157).
+- `tv.subcult.tailscale` (2026-11-13, [[0058-tailscale|ADR 0058]]): the
+  bar's Tailscale panel and `subcult tailscale send` reach tailscaled
+  through pkexec and `/usr/lib/subcult/tailscale-helper`, a root script
+  that runs only `tailscale up`, the sign-in (`tailscale up`, printing the
+  link), `tailscale down`, the exit node (`tailscale set --exit-node=<a
+  Tailscale address> --exit-node-allow-lan-access=true`, or none) and a
+  Taildrop send (`tailscale file cp --name=<name> -` from standard input).
+  It takes only Tailscale addresses and plain file names, and never opens
+  a path the caller names. These are network changes, so the active local
+  session may run it without a password (`allow_active` `yes`), as it may
+  NetworkManager's; other sessions need an administrator's password. So
+  any program the user runs can connect, disconnect, sign in to a tailnet,
+  pick an exit node or send the user's files to a machine on the tailnet;
+  it cannot change other settings. Sending is in the helper because
+  tailscaled 1.104.7 refuses `file cp` to a user who is neither root nor
+  its operator (HTTP 403, "file access denied"). The Taildrop receiver is a root system unit,
+  `subcult-taildrop@<user>.service`, which hands each file to the user.
+  **No account is tailscaled's operator.** An operator could change every
+  tailscaled setting without a password, including turning on Tailscale
+  SSH (a root SSH server that Tailscale's default policy opens to the
+  owner's own devices) and advertising routes or an exit node; checked
+  with tailscale 1.104.7, which has no system policy that turns Tailscale
+  SSH off. Decided 2026-11-13 by the lead under the owner's delegated
+  authority, after review of PR #157, which had proposed the operator
+  grant: no operator grant; a root helper under polkit instead.
 
 ## Borrowed from Omarchy
 

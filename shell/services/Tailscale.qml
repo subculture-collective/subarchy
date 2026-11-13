@@ -6,9 +6,11 @@ import "../widgets/tailscale/Model.js" as Model
 
 // Tailscale (ADR 0058), shared by the bar widget and its panel. The status
 // comes from `tailscale status --json` when the widget's timer fires, when
-// the panel opens and after each action; nothing else polls. The user is
-// tailscaled's operator (set at install), so up, down, sign-in and the exit
-// node need no password.
+// the panel opens and after each action, and every few seconds while a
+// sign-in waits for the browser. Up, down, sign-in and the exit node go
+// through pkexec and the root helper (polkit action tv.subcult.tailscale,
+// no password in the active session); no account is tailscaled's operator
+// (ADR 0062).
 Singleton {
   id: root
 
@@ -18,11 +20,9 @@ Singleton {
   property bool daemonDown: false
   // The last action's error, for the panel.
   property string error: ""
-  // tailscaled refused the last action: the user is not its operator.
-  property bool needsOperator: false
-  // The sign-in link while `tailscale up` waits for the browser.
+  // The sign-in link while tailscaled waits for the browser.
   property string loginUrl: ""
-  readonly property bool signingIn: login.running
+  readonly property bool signingIn: (login.running && !login.cancelled) || root.loginUrl !== ""
   readonly property bool busy: action.running || login.running
 
   // A refresh asked for while a read is under way runs after it: that read
@@ -42,38 +42,36 @@ Singleton {
     action.running = true
   }
 
-  // Signed out, `tailscale up` prints a link and waits until the browser
-  // finishes; signed in, it reconnects with the settings it had. No flags:
-  // any flag would make it re-check every setting against its defaults.
+  // Reconnects with the saved settings (`tailscale up` with no flags: any
+  // flag would make it re-check every setting against its defaults).
   function up() {
+    root.run(Model.helperCommand("up"))
+  }
+
+  // The helper's `login` starts `tailscale up`, prints the sign-in link and
+  // leaves; tailscaled finishes the sign-in once the browser does, which
+  // the status read every few seconds shows.
+  function signIn() {
     if (login.running)
       return
     root.error = ""
-    root.needsOperator = false
     root.loginUrl = ""
     login.cancelled = false
-    login.errText = ""
     login.running = true
   }
 
+  // The helper runs as root and leaves by itself; this only stops waiting.
   function cancelSignIn() {
     login.cancelled = true
-    login.running = false
+    root.loginUrl = ""
   }
 
   function down() {
-    root.run(["tailscale", "down"])
+    root.run(Model.helperCommand("down"))
   }
 
   function setExitNode(peer) {
     root.run(Model.exitNodeCommand(peer))
-  }
-
-  // For a user added after the install: an administrator's password through
-  // polkit, once. tailscaled has one operator, so this takes the role from
-  // any other account that has it.
-  function becomeOperator() {
-    root.run(["pkexec", "tailscale", "set", "--operator=" + Quickshell.env("USER")])
   }
 
   function copy(text) {
@@ -93,22 +91,31 @@ Singleton {
   }
 
   onStatusChanged: {
-    const running = root.status !== null && root.status.running
-    // Signed in: the Taildrop receiver stops waiting and fetches now. The
-    // shell's first read counts too: the receiver may have gone to sleep
-    // while tailscaled was still connecting at login. A restart during a
-    // copy loses nothing; the receiver drops the half-copied file and
-    // tailscaled hands it over again.
-    if (running && !query.wasRunning)
-      Quickshell.execDetached(["systemctl", "--user", "try-restart", "subcult-tailscale-receive.service"])
-    query.wasRunning = running
-    if (running)
+    if (root.status !== null && root.status.running)
       root.loginUrl = ""
+  }
+
+  // While a sign-in waits for the browser, for ten minutes at most.
+  Timer {
+    id: loginPoll
+    property real since: 0
+    interval: 3000
+    repeat: true
+    running: root.loginUrl !== ""
+    onRunningChanged: {
+      if (loginPoll.running)
+        loginPoll.since = Date.now()
+    }
+    onTriggered: {
+      if (Date.now() - loginPoll.since > 600000)
+        root.loginUrl = ""
+      else
+        root.refresh()
+    }
   }
 
   Process {
     id: query
-    property bool wasRunning: false
     property bool again: false
     // Exit 127 without the command, so a missing package hides the widget.
     command: ["sh", "-c", "command -v tailscale >/dev/null || exit 127; exec tailscale status --json"]
@@ -136,8 +143,7 @@ Singleton {
       id: actionErr
     }
     onExited: (code) => {
-      root.needsOperator = code !== 0 && Model.needsOperator(actionErr.text)
-      root.error = code === 0 || root.needsOperator ? "" : Model.errorText(actionErr.text)
+      root.error = code === 0 ? "" : Model.errorText(actionErr.text) || "Tailscale did not change (exit " + code + ")"
       root.refresh()
     }
   }
@@ -145,25 +151,23 @@ Singleton {
   Process {
     id: login
     property bool cancelled: false
-    // What `tailscale up` printed besides the link, for the error.
-    property string errText: ""
-    command: ["tailscale", "up"]
-    stderr: SplitParser {
-      onRead: (line) => {
-        const url = Model.loginUrl(line)
-        if (url !== "" && root.loginUrl === "") {
-          root.loginUrl = url
-          root.openLogin()
-        }
-        if (Model.needsOperator(line))
-          root.needsOperator = true
-        login.errText += line + "\n"
-      }
+    command: Model.helperCommand("login")
+    stdout: StdioCollector {
+      id: loginOut
+    }
+    stderr: StdioCollector {
+      id: loginErr
     }
     onExited: (code) => {
-      if (code !== 0 && !login.cancelled && !root.needsOperator && root.loginUrl === "")
-        root.error = Model.errorText(login.errText) || "tailscale up failed (exit " + code + ")"
-      root.loginUrl = ""
+      const url = Model.loginUrl(loginOut.text)
+      if (login.cancelled)
+        return
+      if (code !== 0)
+        root.error = Model.errorText(loginErr.text) || "Sign-in failed (exit " + code + ")"
+      else if (url !== "") {
+        root.loginUrl = url
+        root.openLogin()
+      }
       root.refresh()
     }
   }
@@ -171,7 +175,7 @@ Singleton {
   IpcHandler {
     target: "subcult.tailscale"
     function refresh(): void { root.refresh() }
-    function signIn(): void { root.up() }
+    function signIn(): void { root.signIn() }
     function cancelSignIn(): void { root.cancelSignIn() }
     function state(): string {
       return JSON.stringify({ installed: root.installed, daemonDown: root.daemonDown,

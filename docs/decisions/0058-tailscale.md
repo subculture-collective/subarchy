@@ -60,43 +60,50 @@ pause during captive portal sign-in.
   through the desktop portal's file picker (`subcult tailscale send`). It
   is in the default bar and reads `tailscale status --json` every minute on
   AC and five on battery, and when the panel opens.
-- 2026-11-13: Operator rights. tailscaled refuses `up`, `down`, `set` and
-  `file get` to a user who is not its operator, and `tailscale set
-  --operator` needs the running daemon, which the installer's chroot does
-  not have. The installer enables `subcult-tailscale-operator@<user>.service`,
-  which runs `tailscale set --operator=<user>` once at first boot; a marker
-  in `/var/lib/subcult` keeps a later choice in place. A migration does the
-  same on installs from before. A user added later gets an "Allow this
-  account" button in the panel (pkexec, an administrator's password). Seen
-  with tailscale 1.104.7 in a container: the operator setting survives
-  `tailscale logout`, but `tailscale login` run by the operator starts a
-  new profile and drops it, so the panel signs in with plain `tailscale up`,
-  which keeps it.
-- 2026-11-13, after review: the operator can change every tailscaled
-  setting without a password, Tailscale SSH (a root SSH server) included,
-  which is a way to root that skips the local password. This ADR did not
-  decide that; [[0062-privilege-policy|ADR 0062]] now lists the grant, what
-  it allows and the narrower alternative, pending the owner's decision.
-  tailscaled has one operator: "Allow this account" takes the role from any
-  other account (the panel says so), while the boot unit and the migration
-  leave another account's role in place. Signed out, `tailscale up` by a
-  user who is not the operator may fail with a demand to repeat
-  `--operator=<the operator>` instead of "Access denied"; the panel treats
-  both as "not the operator". An exit node picked in the panel keeps the
-  local network reachable (`--exit-node-allow-lan-access=true`), and the
-  panel addresses a machine by its Tailscale address for the exit node and
-  for Taildrop.
-- 2026-11-13: Taildrop receive. `subcult-tailscale-receive.service` (user,
-  every session) runs `subcult tailscale receive`: `tailscale file get
-  --wait` into a staging folder under `~/Downloads`, then each file moves to
-  a free name and is announced. Signed out, tailscaled answers `file get`
-  with "no storage directory" at once, so the receiver tries again every
-  five minutes and the panel restarts it when it sees the sign-in. "Runs
-  only while signed in" became "sleeps while signed out". `file get` writes
-  each file under its final name, so each get uses its own folder, which
-  is delivered only after the get succeeds; a folder from a get that was
-  cut off is thrown away at the next start, and tailscaled hands its files
-  over again.
+- 2026-11-13: Privileges. tailscaled refuses `up`, `down`, `set`, `file
+  get` and `file cp` to a user who is neither root nor its operator (seen
+  with tailscale 1.104.7). Making the user the operator would also let
+  any program they run turn on Tailscale SSH, a root SSH server, without
+  the local password, so no account is the operator. Decided 2026-11-13
+  by the lead under the owner's delegated authority (no operator grant; a
+  root helper under polkit); the policy and its reasons are in
+  [[0062-privilege-policy|ADR 0062]]. The panel and `subcult tailscale
+  send` run `pkexec /usr/lib/subcult/tailscale-helper` with one of `up`,
+  `login`, `down`, `exit-node <address>` and `send <address> <name>`;
+  polkit action `tv.subcult.tailscale` lets the active session do that
+  without a password. Reading `tailscale status --json` needs no rights
+  and stays the user's.
+- 2026-11-13: Sign-in. The helper's `login` runs plain `tailscale up`,
+  prints the sign-in link and leaves. With 1.104.7 the pending sign-in,
+  its link and the wish to connect stay in tailscaled after `tailscale up`
+  stops, so the browser completes the sign-in there (not yet tried with a
+  real account). The panel opens the link and reads
+  the status every three seconds, for ten minutes at most, until it shows
+  the machine connected. Plain `up`: any flag would make it check every
+  setting against its default again. An exit node picked in the panel
+  keeps the local network reachable (`--exit-node-allow-lan-access=true`),
+  and the panel addresses a machine by its Tailscale address for the exit
+  node and for Taildrop.
+- 2026-11-13: Taildrop receive. The Decision's "small user service" became
+  a system one, since `tailscale file get` needs root:
+  `subcult-taildrop@<user>.service`, enabled by the installer for the
+  account it makes and by a migration on older installs. It runs
+  `/usr/lib/subcult/taildrop-receive` as root: `tailscale file get --wait
+  --conflict=rename` into its own folder under `/var/lib/subcult-taildrop`
+  (mode 0700), then each file goes to the user as standard input of the
+  same script run as the user (`setpriv`), which writes it to a hidden
+  name in `~/Downloads`, gives it a free name (a taken name gets -1, -2
+  ...) and announces it. Root never writes in the user's home. `file get`
+  writes each file under its final name and then drops it from the inbox,
+  so each get uses its own folder, delivered only after the get succeeds;
+  a folder from a get that was cut off is thrown away at the next start,
+  and tailscaled hands its files over again. That is also why it is
+  `--wait` once per round and not `--loop`. Signed out, tailscaled
+  answers `file get` with "no storage directory" at once; the receiver
+  then waits in `tailscale wait`, which returns once tailscaled is
+  connected, and tries again a minute later. "Runs only while signed in"
+  became "sleeps while signed out". Only the installed account receives
+  files: tailscaled has one inbox per machine.
 - Still open: the exit-node pause during captive portal sign-in
   ([[0020-dns|ADR 0020]]) and whether ufw needs a `tailscale0` rule.
 

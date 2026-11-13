@@ -75,11 +75,13 @@ package() {
   done
   install -Dm755 "$root/tools/bluetooth/pair-agent.py" "$pkgdir/usr/lib/subcult/bluetooth-pair-agent"
   # The desktop portal's file picker for scripts (subcult tailscale send),
-  # the root side of `subcult docker tui` that its polkit action names, and
-  # what subcult-tailscale-operator@.service runs.
+  # the root sides of `subcult docker tui` and of the Tailscale panel that
+  # their polkit actions name, and the Taildrop receiver
+  # subcult-taildrop@.service runs.
   install -Dm755 "$root/tools/portal/file-chooser.py" "$pkgdir/usr/lib/subcult/file-chooser"
   install -Dm755 "$root/tools/docker/lazydocker-root.sh" "$pkgdir/usr/lib/subcult/lazydocker-root"
-  install -Dm755 "$root/tools/tailscale/operator.sh" "$pkgdir/usr/lib/subcult/tailscale-operator"
+  install -Dm755 "$root/tools/tailscale/helper.sh" "$pkgdir/usr/lib/subcult/tailscale-helper"
+  install -Dm755 "$root/tools/tailscale/taildrop-receive.sh" "$pkgdir/usr/lib/subcult/taildrop-receive"
 
   # OS identity (ADR 0052). /etc/os-release takes precedence over the
   # filesystem package's /usr/lib/os-release.
@@ -118,8 +120,10 @@ package() {
   # Daily update check (ADR 0026) and power profile by power source (ADR 0021).
   # subcult theme apply-system becomes root through polkit (ADR 0037, 0062).
   install -Dm644 "$root/default/polkit/tv.subcult.theme.policy" "$pkgdir/usr/share/polkit-1/actions/tv.subcult.theme.policy"
-  # lazydocker reaches the Docker daemon through polkit (ADR 0055).
+  # lazydocker reaches the Docker daemon through polkit (ADR 0055); the
+  # Tailscale panel reaches tailscaled through its helper (ADR 0058).
   install -Dm644 "$root/default/polkit/tv.subcult.docker.policy" "$pkgdir/usr/share/polkit-1/actions/tv.subcult.docker.policy"
+  install -Dm644 "$root/default/polkit/tv.subcult.tailscale.policy" "$pkgdir/usr/share/polkit-1/actions/tv.subcult.tailscale.policy"
   install -Dm644 "$sys/subcult-update-check.service" "$pkgdir/usr/lib/systemd/user/subcult-update-check.service"
   install -Dm644 "$sys/subcult-update-check.timer" "$pkgdir/usr/lib/systemd/user/subcult-update-check.timer"
   install -dm755 "$pkgdir/usr/lib/systemd/user/timers.target.wants"
@@ -131,9 +135,9 @@ package() {
   install -Dm644 "$sys/power-profile.rules" "$pkgdir/usr/lib/udev/rules.d/90-subarchy-power.rules"
   install -Dm644 "$sys/subcult-power-auto.service" "$pkgdir/usr/lib/systemd/system/subcult-power-auto.service"
   install -Dm644 "$sys/subcult-ufw-docker.service" "$pkgdir/usr/lib/systemd/system/subcult-ufw-docker.service"
-  # Tailscale (ADR 0058): the installed user becomes tailscaled's operator at
-  # first boot (the installer enables the instance).
-  install -Dm644 "$sys/subcult-tailscale-operator@.service" "$pkgdir/usr/lib/systemd/system/subcult-tailscale-operator@.service"
+  # Taildrop into the installed user's Downloads (ADR 0058); the installer
+  # enables the instance. Waits on tailscaled between files.
+  install -Dm644 "$sys/subcult-taildrop@.service" "$pkgdir/usr/lib/systemd/system/subcult-taildrop@.service"
   # Dell firmware power and charging profiles (ADR 0021): the files wheel
   # writes from the bar; the widget itself is enabled by `subcult hw`.
   install -Dm644 "$sys/dell-power.rules" "$pkgdir/usr/lib/udev/rules.d/90-subarchy-dell-power.rules"
@@ -218,9 +222,6 @@ package() {
   # Clipboard history for the launcher (ADR 0056); wl-paste sleeps between copies.
   install -Dm644 "$sys/subcult-clipboard.service" "$pkgdir/usr/lib/systemd/user/subcult-clipboard.service"
   ln -s ../subcult-clipboard.service "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/subcult-clipboard.service"
-  # Taildrop into Downloads (ADR 0058); waits on tailscaled between files.
-  install -Dm644 "$sys/subcult-tailscale-receive.service" "$pkgdir/usr/lib/systemd/user/subcult-tailscale-receive.service"
-  ln -s ../subcult-tailscale-receive.service "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/subcult-tailscale-receive.service"
 
   # Migrations run once per user by `subcult update` (ADR 0026).
   install -dm755 "$pkgdir/usr/share/subcult/migrations"

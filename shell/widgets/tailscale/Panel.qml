@@ -19,8 +19,7 @@ PanelBase {
   readonly property bool signedOut: status !== null && status.needsLogin
   readonly property var peers: running ? status.peers : []
   readonly property int onlineCount: Model.online(status).length
-  // `tailscale up` signed out: it waits for the browser. Signed in it only
-  // reconnects, which takes a moment and needs no words.
+  // A sign-in: asking the helper for the link, then waiting for the browser.
   readonly property bool waitingForBrowser: Tailscale.signingIn && (signedOut || Tailscale.loginUrl !== "")
 
   implicitWidth: 340
@@ -129,17 +128,17 @@ PanelBase {
       }
     }
 
-    // Signed out: `tailscale up` prints a link and waits for the browser.
+    // Signed out: the helper prints a link, the browser finishes.
     Note {
       visible: panel.signedOut && !Tailscale.signingIn
       text: "Sign in to join this machine to your tailnet. The sign-in page opens in the browser."
     }
     ActionButton {
       objectName: "signIn"
-      visible: panel.signedOut && !Tailscale.signingIn && !Tailscale.needsOperator
+      visible: panel.signedOut && !Tailscale.signingIn
       width: parent.width
       text: "Sign in"
-      onClicked: Tailscale.up()
+      onClicked: Tailscale.signIn()
     }
     Note {
       visible: panel.waitingForBrowser
@@ -165,19 +164,6 @@ PanelBase {
         text: "Cancel"
         onClicked: Tailscale.cancelSignIn()
       }
-    }
-
-    // A user added after the install is not tailscaled's operator yet.
-    Note {
-      visible: Tailscale.needsOperator
-      text: "Tailscale does not let this account control it yet. Allowing it asks for an administrator's password once. Only one account can control Tailscale: if another account does, it loses that."
-    }
-    ActionButton {
-      objectName: "operator"
-      visible: Tailscale.needsOperator
-      width: parent.width
-      text: "Allow this account"
-      onClicked: Tailscale.becomeOperator()
     }
 
     Note {

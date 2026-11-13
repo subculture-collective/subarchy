@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
-# `subcult tailscale receive` and `send` (ADR 0058) with stand-ins for
-# tailscale, notify-send and the file picker. Receive: files tailscale
-# delivers into staging move to the folder under free names (a taken name
-# gets -1), each is announced, a finished get an earlier run left is
-# delivered first while an unfinished one is dropped unannounced, a failed
-# get delivers nothing, a removed staging folder is made again, and a
-# refusal (signed out) fails --once. Send: the picker's files go to
-# `tailscale file cp` with the machine, --name names it in the picker and
-# the notification, a closed picker sends nothing, and a failed transfer is
-# announced and fails.
+# Taildrop (ADR 0058) with stand-ins for tailscale, setpriv, pkexec,
+# notify-send and the file picker.
+#
+# Receive (/usr/lib/subcult/taildrop-receive, root): files tailscale
+# delivers into root's staging folder reach the user's Downloads through
+# setpriv as that user, under free names (a taken name gets -1), and each
+# is announced; a finished get an earlier run left is delivered first while
+# an unfinished one is dropped unannounced; a failed get delivers nothing; a
+# removed Downloads is made again; a refusal (signed out) fails --once.
+#
+# Send (`subcult tailscale send`): each picked file goes to the root helper
+# through pkexec as standard input, with its name and the machine's
+# address; a name is looked up first; --name names the machine in the
+# picker and the notification; a closed picker sends nothing; a failed
+# transfer is announced and fails.
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
 fail() { echo "taildrop-test: $*" >&2; exit 1; }
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
-mkdir -p "$work/bin" "$work/home/Downloads"
-export TD_TEST="$work" PATH="$work/bin:$PATH" HOME="$work/home"
+mkdir -p "$work/bin" "$work/home/Downloads" "$work/spool"
+chmod 0700 "$work/spool"
+export TD_TEST="$work" PATH="$work/bin:$PATH" HOME="$work/home" STATE_DIRECTORY="$work/spool"
 unset XDG_DOWNLOAD_DIR
 
 cat >"$work/bin/tailscale" <<'STUB'
@@ -30,10 +36,27 @@ case "$1 $2" in
   # Killed halfway: one file written, then a failure.
   [[ -e $TD_TEST/get-fails ]] && { echo "context canceled" >&2; exit 1; }
   printf 'img' >"$dest/photo.png";;
-"file cp")
-  [[ -e $TD_TEST/cp-fails ]] && { echo "kvant: no matching peer" >&2; exit 1; };;
+"ip -1") [[ $3 == kvant* ]] && echo 100.64.0.2 || { echo "no such peer" >&2; exit 1; };;
 esac
 exit 0
+STUB
+# setpriv: the options are recorded, the command after -- runs as is.
+cat >"$work/bin/setpriv" <<'STUB'
+#!/bin/bash
+opts=()
+while [[ $1 != -- ]]; do opts+=("$1"); shift; done
+shift
+echo "${opts[*]}" >>"$TD_TEST/setpriv-log"
+exec "$@"
+STUB
+# pkexec: runs the helper, as the test is not root; the helper's
+# tailscale is the stand-in above, which stores what it is given.
+cat >"$work/bin/pkexec" <<'STUB'
+#!/bin/bash
+echo "pkexec $*" >>"$TD_TEST/pkexec-log"
+[[ $2 == send ]] || exit 1
+[[ -e $TD_TEST/cp-fails ]] && { echo "100.64.0.2: no matching peer" >&2; exit 1; }
+cat >>"$TD_TEST/sent"
 STUB
 cat >"$work/bin/notify-send" <<'STUB'
 #!/bin/bash
@@ -45,24 +68,34 @@ echo "$*" >>"$TD_TEST/chooser-log"
 [[ -e $TD_TEST/chooser-closed ]] && exit 1
 printf '%s\n' "$TD_TEST/a file.pdf" "$TD_TEST/b.txt"
 STUB
-chmod +x "$work/bin/tailscale" "$work/bin/notify-send" "$work/chooser"
+chmod +x "$work/bin/"* "$work/chooser"
+printf 'A' >"$work/a file.pdf"
+printf 'B' >"$work/b.txt"
 
-receive() { "$root/bin/subcult-tailscale-receive" --once "$@"; }
+me=$(id -un)
+receive() { "$root/tools/tailscale/taildrop-receive.sh" --once "$me"; }
 dl=$work/home/Downloads
+spool=$work/spool
 
 # A taken name is kept, the new file gets -1; a finished get an earlier run
 # left arrives too, an unfinished one is dropped without a word.
 printf 'old' >"$dl/notes.txt"
-mkdir -p "$dl/.taildrop/done.AAAAAA" "$dl/.taildrop/get.BBBBBB"
-printf 'left' >"$dl/.taildrop/done.AAAAAA/left.bin"
-printf 'cut' >"$dl/.taildrop/get.BBBBBB/cut-off.iso"
+mkdir -p "$spool/done.AAAAAA" "$spool/get.BBBBBB"
+printf 'left' >"$spool/done.AAAAAA/left.bin"
+printf 'cut' >"$spool/get.BBBBBB/cut-off.iso"
 receive || fail "receive --once failed"
 [[ $(<"$dl/notes.txt") == old && $(<"$dl/notes-1.txt") == new ]] || fail "a taken name was overwritten: $(ls -A "$dl")"
-[[ -f $dl/photo.png && -f $dl/left.bin ]] || fail "files missing from Downloads: $(ls -A "$dl")"
+[[ $(<"$dl/photo.png") == img && $(<"$dl/left.bin") == left ]] || fail "files missing from Downloads: $(ls -A "$dl")"
 [[ ! -e $dl/cut-off.iso ]] || fail "a file from an unfinished get was delivered"
-[[ -z $(ls -A "$dl/.taildrop") ]] || fail "staging not emptied: $(ls -A "$dl/.taildrop")"
-grep -qE "^file get --wait --conflict=rename $dl/\.taildrop/get\.[A-Za-z0-9]{6}\$" "$work/tailscale-log" ||
+[[ -z $(ls -A "$spool") ]] || fail "staging not emptied: $(ls -A "$spool")"
+[[ -z $(find "$dl" -name '.taildrop-*') ]] || fail "a hidden copy was left: $(ls -A "$dl")"
+grep -qE "^file get --wait --conflict=rename $spool/get\.[A-Za-z0-9]{6}\$" "$work/tailscale-log" ||
   fail "tailscale file get: $(cat "$work/tailscale-log")"
+# Each file went over as the user, with the session bus for the notification.
+uid=$(id -u) gid=$(id -g)
+[[ $(sort -u "$work/setpriv-log") == "--reuid=$uid --regid=$gid --init-groups --reset-env" ]] ||
+  fail "not delivered as the user: $(sort -u "$work/setpriv-log")"
+[[ $(wc -l <"$work/setpriv-log") == 3 ]] || fail "deliveries: $(wc -l <"$work/setpriv-log")"
 [[ $(grep -c '^Received ' "$work/notes") == 3 ]] || fail "not every file announced: $(cat "$work/notes")"
 grep -qx 'Received notes-1.txt | Saved to ~/Downloads' "$work/notes" || fail "announcement: $(cat "$work/notes")"
 grep -q 'cut-off' "$work/notes" && fail "a file from an unfinished get was announced"
@@ -73,52 +106,58 @@ touch "$work/get-fails"
 if receive 2>/dev/null; then fail "receive --once succeeded after a failed get"; fi
 rm "$work/get-fails"
 [[ ! -e $dl/notes-2.txt && ! -s $work/notes ]] || fail "a failed get delivered: $(ls -A "$dl"; cat "$work/notes")"
-[[ -z $(ls -A "$dl/.taildrop") ]] || fail "a failed get left files: $(ls -A "$dl/.taildrop")"
+[[ -z $(ls -A "$spool") ]] || fail "a failed get left files: $(ls -A "$spool")"
 
-# Downloads removed while the receiver runs: the next round makes it again.
+# Downloads removed: the delivery makes it again.
 rm -rf "$dl"
 receive || fail "receive --once failed after Downloads was removed"
 [[ -f $dl/notes.txt ]] || fail "Downloads not made again: $(ls -A "$work/home")"
-rm -f "$dl"/*
 
 # Signed out: --once fails, nothing lands.
+rm -f "$dl"/*
 touch "$work/signed-out"
 if receive 2>/dev/null; then fail "receive --once succeeded while signed out"; fi
 rm "$work/signed-out"
+[[ -z $(ls -A "$dl") ]] || fail "files landed while signed out: $(ls -A "$dl")"
 
-# Another folder, given as the argument.
-mkdir "$work/elsewhere"
-receive "$work/elsewhere" || fail "receive into another folder failed"
-[[ -f $work/elsewhere/notes.txt ]] || fail "the folder argument was ignored"
+# The user's side refuses a name with a folder in it.
+if "$root/tools/tailscale/taildrop-receive.sh" --deliver ../escape </dev/null 2>/dev/null; then fail "--deliver took a name with a folder"; fi
+[[ ! -e $work/home/escape ]] || fail "--deliver wrote outside Downloads"
 
-# Send through the picker.
-export SUBCULT_FILE_CHOOSER=$work/chooser
+# Send through the picker, to a machine by name.
+export SUBCULT_FILE_CHOOSER=$work/chooser SUBCULT_TAILSCALE_HELPER=/usr/lib/subcult/tailscale-helper
 : >"$work/notes"
 "$root/bin/subcult-tailscale-send" kvant.tail1.ts.net || fail "send failed"
-grep -qx "file cp --update-interval=0 -- $work/a file.pdf $work/b.txt kvant.tail1.ts.net:" "$work/tailscale-log" ||
-  fail "tailscale file cp: $(tail -1 "$work/tailscale-log")"
+[[ $(cat "$work/pkexec-log") == "pkexec /usr/lib/subcult/tailscale-helper send 100.64.0.2 a file.pdf
+pkexec /usr/lib/subcult/tailscale-helper send 100.64.0.2 b.txt" ]] || fail "pkexec calls: $(cat "$work/pkexec-log")"
+[[ $(<"$work/sent") == AB ]] || fail "the files did not go as standard input: $(<"$work/sent")"
 grep -qx -- '--title Send to kvant --multiple' "$work/chooser-log" || fail "picker title: $(cat "$work/chooser-log")"
 grep -qx 'Sent to kvant | 2 files' "$work/notes" || fail "send announcement: $(cat "$work/notes")"
 
+# An unknown machine: nothing sent, the picker not even opened.
+rm -f "$work/pkexec-log" "$work/chooser-log"
+if "$root/bin/subcult-tailscale-send" nowhere 2>/dev/null; then fail "an unknown machine succeeded"; fi
+[[ ! -e $work/pkexec-log && ! -e $work/chooser-log ]] || fail "an unknown machine still went on"
+
 # A closed picker sends nothing and is no error.
 touch "$work/chooser-closed"
-n=$(wc -l <"$work/tailscale-log")
-"$root/bin/subcult-tailscale-send" kvant || fail "a closed picker failed"
-[[ $(wc -l <"$work/tailscale-log") == "$n" ]] || fail "a closed picker still sent"
+"$root/bin/subcult-tailscale-send" 100.64.0.2 || fail "a closed picker failed"
+[[ ! -e $work/pkexec-log ]] || fail "a closed picker still sent"
 
 # The panel's form: the address, and the name for the picker and the
 # notification.
 rm "$work/chooser-closed"
 : >"$work/notes"
 "$root/bin/subcult-tailscale-send" --name Phone 100.64.0.3 || fail "send --name failed"
-grep -qx "file cp --update-interval=0 -- $work/a file.pdf $work/b.txt 100.64.0.3:" "$work/tailscale-log" ||
-  fail "tailscale file cp by address: $(tail -1 "$work/tailscale-log")"
+grep -qx "pkexec /usr/lib/subcult/tailscale-helper send 100.64.0.3 b.txt" "$work/pkexec-log" ||
+  fail "pkexec by address: $(cat "$work/pkexec-log")"
 grep -qx -- '--title Send to Phone --multiple' "$work/chooser-log" || fail "picker title with --name: $(cat "$work/chooser-log")"
 grep -qx 'Sent to Phone | 2 files' "$work/notes" || fail "send announcement with --name: $(cat "$work/notes")"
 if "$root/bin/subcult-tailscale-send" --name 2>/dev/null; then fail "--name without a machine succeeded"; fi
 
-# Files on the command line, and a failed transfer.
+# A file that is not there, and a failed transfer.
+if "$root/bin/subcult-tailscale-send" 100.64.0.2 "$work/missing.txt" 2>/dev/null; then fail "a missing file succeeded"; fi
 touch "$work/cp-fails"
-if "$root/bin/subcult-tailscale-send" 100.64.0.2 "$work/x.txt" 2>/dev/null; then fail "a failed transfer succeeded"; fi
-grep -qx 'Nothing sent to 100.64.0.2 | kvant: no matching peer' "$work/notes" || fail "failure announcement: $(cat "$work/notes")"
+if "$root/bin/subcult-tailscale-send" 100.64.0.2 "$work/b.txt" 2>/dev/null; then fail "a failed transfer succeeded"; fi
+grep -qx 'Nothing sent to 100.64.0.2 | 100.64.0.2: no matching peer' "$work/notes" || fail "failure announcement: $(cat "$work/notes")"
 echo "taildrop-test: ok"

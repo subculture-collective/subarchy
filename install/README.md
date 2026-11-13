@@ -38,7 +38,9 @@ rotating tip (`progress.go`). L switches a window with the end of the
 install log on and off; the raw output goes to `/var/log/subarchy-install.log`,
 which is also where the percentage is read from. The finish screen offers
 "Reboot now". A failure says why the install stopped (subarchy-install's
-own message, else the last pacman or mkinitcpio error) and at which step,
+own fatal message, the line that starts `subarchy-install: error:`, else
+the last pacman or mkinitcpio error; its warnings, such as a failed
+`pult apply`, never count) and at which step,
 shows the end of this run's log and offers a menu. `--plain`
 gives the prompts below instead.
 

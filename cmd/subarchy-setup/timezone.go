@@ -125,10 +125,7 @@ type zoneGuess struct {
 // one, and returns the line that says where it came from. list is the
 // zones on offer, sorted; a guess outside it is not used.
 func (g *zoneGuess) guess(a *setup.Answers, lookup func() string, list []string, waiting func()) string {
-	known := func(z string) bool {
-		i := sort.SearchStrings(list, z)
-		return z != "" && i < len(list) && list[i] == z
-	}
+	known := func(z string) bool { return listed(list, z) }
 	if g.picked {
 		return ""
 	}
@@ -154,4 +151,10 @@ func (g *zoneGuess) guess(a *setup.Answers, lookup func() string, list []string,
 		return "Guessed from the language you chose. Type to search for another."
 	}
 	return ""
+}
+
+// listed reports whether zone is in list, which is sorted.
+func listed(list []string, zone string) bool {
+	i := sort.SearchStrings(list, zone)
+	return zone != "" && i < len(list) && list[i] == zone
 }

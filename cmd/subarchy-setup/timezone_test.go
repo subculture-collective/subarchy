@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -105,7 +107,18 @@ func TestPlainTimeZoneGuess(t *testing.T) {
 		return strings.TrimRight(s, "\n"), err
 	}
 	a, err := collect(p, e, "file:///repo", "")
-	if err != nil || a.Timezone != "Europe/Berlin" || !strings.Contains(out.String(), "Time zone [Europe/Berlin]") {
+	if err != nil || a.Timezone != "Europe/Berlin" || !strings.Contains(out.String(), "Time zone [Europe/Berlin]") ||
+		!strings.Contains(out.String(), "Looking up the time zone") {
+		t.Errorf("zone %q, err %v:\n%s", a.Timezone, err, out.String())
+	}
+
+	// A file under zoneinfo that is not a zone is not offered, though
+	// ValidTimezone would take it.
+	os.WriteFile(filepath.Join(e.zoneinfo, "posixrules"), nil, 0o644)
+	e.lookupZone = func() string { return "posixrules" }
+	out.Reset()
+	p.in = bufio.NewReader(strings.NewReader(goodInputDefaultZone))
+	if a, err := collect(p, e, "file:///repo", ""); err != nil || a.Timezone != "UTC" || !strings.Contains(out.String(), "Time zone [UTC]") {
 		t.Errorf("zone %q, err %v:\n%s", a.Timezone, err, out.String())
 	}
 }

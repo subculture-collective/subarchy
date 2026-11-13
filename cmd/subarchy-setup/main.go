@@ -243,7 +243,10 @@ func collect(p *prompter, e env, repo, cmdlineExtra string) (setup.Answers, erro
 	}
 	zone := "UTC"
 	if e.lookupZone != nil {
-		if z := e.lookupZone(); z != "" && setup.ValidTimezone(e.zoneinfo, z) == nil {
+		fmt.Fprintln(p.out, "Looking up the time zone of where your network is...")
+		// Only a zone the screens would list: any file under zoneinfo
+		// passes ValidTimezone, zone.tab and posixrules included.
+		if z := e.lookupZone(); listed(zones(e.zoneinfo), z) {
 			zone = z // the network's location; Enter takes it
 		}
 	}
@@ -494,12 +497,22 @@ func main() {
 		}
 		// Under the install view the output goes only to the log. What
 		// subarchy-install says before its log begins (a disk it refuses)
-		// goes to stderr, and becomes the failure screen's reason.
-		var stderr strings.Builder
-		cmd.Stderr = &stderr
-		err := cmd.Run()
-		if _, why := failReason(stderr.String()); err != nil && why != "" {
-			return errors.New(why)
+		// goes to stderr, and becomes the failure screen's reason. A file,
+		// not a pipe: Run would wait for a pipe's last writer, and the
+		// log's tee or a process the install started can outlive it.
+		stderr, err := os.CreateTemp("", "subarchy-install-stderr-")
+		if err != nil {
+			return cmd.Run()
+		}
+		defer os.Remove(stderr.Name())
+		defer stderr.Close()
+		cmd.Stderr = stderr
+		if err = cmd.Run(); err != nil {
+			if said, rerr := os.ReadFile(stderr.Name()); rerr == nil {
+				if _, why := failReason(string(said)); why != "" {
+					return errors.New(why)
+				}
+			}
 		}
 		return err
 	}

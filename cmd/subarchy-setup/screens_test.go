@@ -257,20 +257,30 @@ func TestZones(t *testing.T) {
 }
 
 // A failed install's reason comes from its log: subarchy-install's own
-// message before a cleanup note after it, else the last tool error near
-// the end, but not a mirror error from long before.
+// fatal message, not a note it carried on after or the cleanup note
+// after it, else the last tool error near the end, but not a mirror
+// error from long before.
 func TestFailReason(t *testing.T) {
 	mirror := "error: failed retrieving file 'a.pkg' from mirror : timed out\n"
 	quiet := strings.Repeat("installing x...\n", failTail)
 	for _, c := range []struct{ log, step, why string }{
 		{"", "", ""},
-		{">> partitioning /dev/vda\n>> encrypting\nsubarchy-install: partitions did not appear\n" +
+		{">> partitioning /dev/vda\n>> encrypting\nsubarchy-install: error: partitions did not appear\n" +
 			"subarchy-install: could not close the encrypted volume; before another try run: cryptsetup close root\n",
 			"Encrypting the disk", "partitions did not appear"},
 		{">> installing packages\n" + mirror + "Packages (2) a b\n" + quiet + "\x1b[1m==> ERROR:\x1b[0m module not found\n",
 			"Installing packages (2 of 2)", "module not found"},
 		{">> installing packages\n" + mirror + quiet, "Installing packages", ""},
-		{"subarchy-install: DISK /dev/vda has mounted partitions\n", "", "DISK /dev/vda has mounted partitions"},
+		{"subarchy-install: error: DISK /dev/vda has mounted partitions\n", "", "DISK /dev/vda has mounted partitions"},
+		// A warning shortly before the fatal message is not the reason.
+		{"subarchy-install: pult apply failed; run it after login\n>> configuring snapper\n>> checking the boot entries\n" +
+			"subarchy-install: error: linux-zen UKI missing\n", "Checking the boot entries", "linux-zen UKI missing"},
+		// Nor before a tool error that ends the run without one.
+		{">> installing packages\nsubarchy-install: subcult-hw not found; installing all firmware and microcode\n" +
+			"error: target not found: nope\n", "Installing packages", "target not found: nope"},
+		{">> installing packages\nerror: target not found: nope\n" +
+			"subarchy-install: installing from the mirrors failed; trying again from the image's repository alone\n" +
+			"error: target not found: nope\n", "Installing packages", "target not found: nope"},
 	} {
 		step, why := failReason(c.log)
 		if step != c.step || why != c.why {

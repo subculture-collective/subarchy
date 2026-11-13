@@ -392,9 +392,11 @@ func tail(log string, n int) []string {
 }
 
 // installMessage is a line where the install says why it stopped:
-// subarchy-install's own message, or an error from pacman, pacstrap or
-// mkinitcpio.
-var installMessage = regexp.MustCompile(`(?m)^(subarchy-install: |error: |==> ERROR: )(.+)$`)
+// subarchy-install's own fatal message (its die), or an error from
+// pacman, pacstrap or mkinitcpio. subarchy-install's other lines are
+// notes it carries on after (pult apply failed, a mirror fallback, the
+// cleanup), so they never count as the reason.
+var installMessage = regexp.MustCompile(`(?m)^(subarchy-install: error: |error: |==> ERROR: )(.+)$`)
 
 // failTail is how many lines at the end of the log failReason looks at
 // for an error: pacman reports mirrors that failed mid-download as
@@ -403,8 +405,8 @@ const failTail = 40
 
 // failReason reads the log of an install that failed: the step it was
 // on and why it stopped, each "" when the log does not say.
-// subarchy-install's own message comes first, then the last error from
-// the tools it ran.
+// subarchy-install's own fatal message comes first, then the last error
+// from the tools it ran.
 func failReason(log string) (step, why string) {
 	if _, _, label := progressOf(log); label != "Starting" {
 		step = label
@@ -418,10 +420,8 @@ func failReason(log string) (step, why string) {
 		m := installMessage.FindStringSubmatch(plainLine(l))
 		switch {
 		case m == nil:
-		case m[1] == "subarchy-install: ":
-			if own == "" {
-				own = m[2] // a note from the cleanup can follow it
-			}
+		case m[1] == "subarchy-install: error: ":
+			own = m[2]
 		default:
 			tool = m[2]
 		}

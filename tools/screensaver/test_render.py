@@ -24,7 +24,8 @@ class RenderTest(unittest.TestCase):
                 f.write(("0 %d\n0.5 0\n" % len(data)).encode())
             palette = work / "palette.json"
             palette.write_text(json.dumps({"colors": {"base": "#100b19", "lavender": "#a78bfa"}}))
-            out = work / "out"
+            # Brackets in the path: the cleanup must not read it as a pattern.
+            out = work / "out[1]"
             command = [sys.executable, str(ROOT / "bin/subcult-screensaver-render"),
                        "--captures", tmp, "--out", str(out), "--palette", str(palette),
                        "--size", "192x54", "--fps", "2"]
@@ -32,8 +33,11 @@ class RenderTest(unittest.TestCase):
             stale = out / ".render-stale"
             stale.mkdir(parents=True)
             (stale / "probe.webm").write_bytes(b"partial")
+            elsewhere = work / "out1" / ".render-other"
+            elsewhere.mkdir(parents=True)
             subprocess.run(command, check=True, capture_output=True)
             self.assertFalse(stale.exists(), "the next render removes a stopped render's work directory")
+            self.assertTrue(elsewhere.exists(), "the cleanup stays inside the output directory")
             before = (out / "probe.png").read_bytes()
             stamp = (out / "index.json").stat().st_mtime_ns
             result = subprocess.run(command, check=True, capture_output=True, text=True)

@@ -19,7 +19,6 @@ machine: these loops are what the lock plays.
 """
 import argparse
 import fcntl
-import glob
 import gzip
 import hashlib
 import json
@@ -194,8 +193,9 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         # A render stopped by SIGTERM or SIGKILL (a restart for a new theme,
         # RuntimeMaxSec) leaves its work directory; no render holds one now.
-        for d in glob.glob(os.path.join(out, ".render-*")):
-            shutil.rmtree(d, ignore_errors=True)
+        for entry in os.scandir(out):
+            if entry.name.startswith(".render-") and entry.is_dir(follow_symlinks=False):
+                shutil.rmtree(entry.path, ignore_errors=True)
         if a.user and not (a.out or a.captures or a.force) and (width, height, a.fps) == (960, 540, 30) \
                 and shipped_matches(system, palette_path):
             # The package rendered these colours already; the lock falls
@@ -229,7 +229,8 @@ def render_all(a, names, captures, out, palette_path, width, height):
             break
     if font is None:
         font = ImageFont.load_default()
-    inputs = [__file__, palette_path] + [os.path.join(captures, n + ext) for n in names for ext in (".log.gz", ".tm.gz")]
+    inputs = [__file__, palette_path] + ([font_path] if font_path else []) \
+        + [os.path.join(captures, n + ext) for n in names for ext in (".log.gz", ".tm.gz")]
     digest = hashlib.sha256(json.dumps([palette, width, height, a.fps, font_path], sort_keys=True).encode())
     for path in inputs:
         with open(path, "rb") as f:

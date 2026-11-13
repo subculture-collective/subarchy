@@ -21,7 +21,7 @@ frames to ffmpeg at 960×540, 30 fps by default. ANSI colours use the palette;
 recorded truecolour gradients keep their brightness and take its lavender.
 ttfx draws at the terminal's top left; the renderer centres the cells any
 frame draws on. The last frame becomes still art. Input hashes include the palette, captures,
-font, renderer and output settings; unchanged inputs do nothing. A lock serialises
+font file, renderer and output settings; unchanged inputs do nothing. A lock serialises
 renders, outputs replace atomically, and the index publishes last. A render
 stopped part-way (a restart for a new theme, or the unit's time limit) leaves
 its `.render-*` work directory; the next render removes it.

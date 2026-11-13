@@ -32,8 +32,6 @@ subarchy-nvim
 # Desktop shell and look (shell and look design)
 quickshell
 pult
-# GTK 3 and plain GTK 4 apps draw from the colours Pult sets (ADR 0037).
-adw-gtk-theme
 papirus-icon-theme
 brightnessctl
 libnotify

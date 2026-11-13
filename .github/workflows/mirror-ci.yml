@@ -67,10 +67,12 @@ jobs:
       - name: Checks the Ubuntu verify job skips
         # Hyprland, Neovim, zsh, lua and the role fonts exist only here; each
         # of these tests skips without its tool, so a skip fails this step.
+        # shell-rc-test drops zsh silently, so it must report both shells.
         run: |
           su builder -c 'export XDG_RUNTIME_DIR=$(mktemp -d); chmod 700 "$XDG_RUNTIME_DIR"; set -e
             for t in hypr-motion-test hypr-theme-test nvim-theme-test fontconfig-test shell-rc-test; do
               out=$(tools/test/$t.sh); echo "$out"; [[ $out != *skipped* ]]
+              [[ $t != shell-rc-test || $out == *"(2 shells)"* ]]
             done
             out=$(make -s hypr-check); echo "$out"; [[ $out == *ok* ]]'
 

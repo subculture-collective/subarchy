@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conformance probe: encode, recolour, skip unchanged input and reject bad sizes."""
+"""Conformance probe: encode, recolour, skip unchanged input, clear stopped renders and reject bad sizes."""
 import gzip
 import json
 from pathlib import Path
@@ -28,7 +28,12 @@ class RenderTest(unittest.TestCase):
             command = [sys.executable, str(ROOT / "bin/subcult-screensaver-render"),
                        "--captures", tmp, "--out", str(out), "--palette", str(palette),
                        "--size", "192x54", "--fps", "2"]
+            # A render stopped by SIGTERM leaves its work directory behind.
+            stale = out / ".render-stale"
+            stale.mkdir(parents=True)
+            (stale / "probe.webm").write_bytes(b"partial")
             subprocess.run(command, check=True, capture_output=True)
+            self.assertFalse(stale.exists(), "the next render removes a stopped render's work directory")
             before = (out / "probe.png").read_bytes()
             stamp = (out / "index.json").stat().st_mtime_ns
             result = subprocess.run(command, check=True, capture_output=True, text=True)

@@ -28,10 +28,15 @@ var (
 )
 
 func init() {
+	// System accounts, then the groups every install has: useradd refuses
+	// a name that is already a group, after the disk is wiped.
 	for _, u := range strings.Fields(`root bin daemon mail ftp http nobody dbus systemd-coredump
 		systemd-network systemd-oom systemd-journal-remote systemd-resolve systemd-timesync tss
 		uuidd alpm git avahi cups cups-browsed lp _talkd polkitd rtkit qemu brltty gluster rpc
-		libvirt-qemu pcscd nvidia-persistenced sddm`) {
+		libvirt-qemu pcscd nvidia-persistenced sddm
+		sys mem log smmsp proc games lock network floppy scanner power adm wheel empower utmp
+		audio clock disk input kmem kvm optical render sgx storage tty uucp video users
+		systemd-journal rfkill docker realtime`) {
 		reservedUsers[u] = true
 	}
 }
@@ -42,7 +47,7 @@ func ValidUsername(name string) error {
 		return errors.New("use lowercase letters, digits, - and _, starting with a letter or _ (at most 32)")
 	}
 	if reservedUsers[name] {
-		return fmt.Errorf("%q is a system account", name)
+		return fmt.Errorf("%q is a system account or group", name)
 	}
 	return nil
 }
@@ -140,7 +145,15 @@ type Disk struct {
 	Size  int64
 	Model string
 	Tran  string
-	Parts []Part
+	// Removable is the kernel's removable flag: an SD card or a USB stick.
+	Removable bool
+	Parts     []Part
+}
+
+// External reports whether the disk is plugged in from outside: on USB or
+// FireWire, or removable. The disk list puts these after the internal ones.
+func (d Disk) External() bool {
+	return d.Removable || d.Tran == "usb" || d.Tran == "ieee1394"
 }
 
 // Part is a partition already on a disk, shown so the user can tell the
@@ -234,6 +247,7 @@ type lsblkOutput struct {
 		Model    *string `json:"model"`
 		Tran     *string `json:"tran"`
 		RO       bool    `json:"ro"`
+		RM       bool    `json:"rm"`
 		Children []struct {
 			Path   string  `json:"path"`
 			Size   int64   `json:"size"`
@@ -244,9 +258,10 @@ type lsblkOutput struct {
 	} `json:"blockdevices"`
 }
 
-// Disks parses `lsblk -J -b -o NAME,PATH,SIZE,TYPE,MODEL,TRAN,RO,FSTYPE,LABEL` and
-// returns whole, writable disks of at least MinDiskBytes, leaving out
-// zram, loop and optical devices and the install medium.
+// Disks parses `lsblk -J -b -o NAME,PATH,SIZE,TYPE,MODEL,TRAN,RO,RM,FSTYPE,LABEL`
+// and returns whole, writable disks of at least MinDiskBytes, leaving out
+// zram, loop and optical devices and the install medium. Internal disks
+// come first, then the external ones, each by path.
 func Disks(lsblkJSON []byte, installMedium string) ([]Disk, error) {
 	var out lsblkOutput
 	if err := json.Unmarshal(lsblkJSON, &out); err != nil {
@@ -260,7 +275,7 @@ func Disks(lsblkJSON []byte, installMedium string) ([]Disk, error) {
 		if installMedium != "" && d.Path == installMedium {
 			continue
 		}
-		disk := Disk{Path: d.Path, Size: d.Size}
+		disk := Disk{Path: d.Path, Size: d.Size, Removable: d.RM}
 		if d.Model != nil {
 			disk.Model = strings.TrimSpace(*d.Model)
 		}
@@ -282,7 +297,12 @@ func Disks(lsblkJSON []byte, installMedium string) ([]Disk, error) {
 		}
 		disks = append(disks, disk)
 	}
-	sort.Slice(disks, func(i, j int) bool { return disks[i].Path < disks[j].Path })
+	sort.Slice(disks, func(i, j int) bool {
+		if a, b := disks[i].External(), disks[j].External(); a != b {
+			return b
+		}
+		return disks[i].Path < disks[j].Path
+	})
 	return disks, nil
 }
 

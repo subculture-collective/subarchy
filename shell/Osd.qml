@@ -19,13 +19,16 @@ PanelWindow { // qmllint disable uncreatable-type
   property string kind: ""
   property real value: 0
   property bool muted: false
-  property var lastVolume: null
   property string label: ""
   property int lastWorkspace: -1
   // The backlight's sysfs folder, found once at start; empty without one.
   property string backlight: ""
 
   readonly property var sink: Pipewire.defaultAudioSink
+  // A new sink's first reading is not a change of volume; one that is
+  // already loaded gives its reading as the baseline at once.
+  readonly property var volume: Model.volumeTracker()
+  onSinkChanged: osd.volume.switchTo(osd.sink)
 
   visible: kind !== ""
   screen: place.screen
@@ -75,10 +78,8 @@ PanelWindow { // qmllint disable uncreatable-type
   }
 
   function volumeEvent() {
-    const now = { volume: osd.sink.audio.volume, muted: osd.sink.audio.muted }
-    if (Model.volumeChanged(osd.lastVolume, now))
+    if (osd.volume.reading(osd.sink))
       osd.show("volume")
-    osd.lastVolume = now
   }
 
   // sysfs does not report changes, so the level is read again each time.
@@ -91,11 +92,12 @@ PanelWindow { // qmllint disable uncreatable-type
   }
 
   // One write at a time: a press (or key repeat) while one runs is dropped.
+  // Without a backlight it does nothing: brightnessctl with no -d would
+  // change the first LED instead, such as Caps Lock's.
   function stepBrightness(change) {
-    if (brightnessSet.running)
+    if (brightnessSet.running || osd.backlight === "")
       return
-    const device = osd.backlight === "" ? [] : ["-d", osd.backlight.split("/").pop()]
-    brightnessSet.command = ["brightnessctl", "-q"].concat(device, ["set", change])
+    brightnessSet.command = ["brightnessctl", "-q", "-d", osd.backlight.split("/").pop(), "set", change]
     brightnessSet.running = true
   }
 

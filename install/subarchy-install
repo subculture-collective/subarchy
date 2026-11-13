@@ -34,7 +34,10 @@ here=$(dirname "$(realpath "$0")")
 target=/mnt
 log=/var/log/subarchy-install.log
 
-die() { echo "subarchy-install: $*" >&2; exit 1; }
+# die stops the install. "error:" marks the message that ends a run, which
+# subarchy-setup shows as the reason; the other subarchy-install lines are
+# notes the install carries on after.
+die() { echo "subarchy-install: error: $*" >&2; exit 1; }
 step() { echo ">> $*"; }
 
 declare -A conf=(
@@ -58,6 +61,13 @@ read_config() {
   done
   [[ ${conf[HOSTNAME]} =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || die "HOSTNAME: lowercase letters, digits and dashes"
   [[ ${conf[USERNAME]} =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "USERNAME: not a valid user name"
+  # useradd refuses a name that is already a group (it would make a user
+  # group of that name); the live image shares the target's base groups.
+  # docker and realtime come only with the target's packages.
+  if [[ ${conf[USERNAME]} == @(docker|realtime) ]] ||
+    getent group "${conf[USERNAME]}" >/dev/null || getent passwd "${conf[USERNAME]}" >/dev/null; then
+    die "USERNAME: ${conf[USERNAME]} is a system account or group"
+  fi
   [[ -f /usr/share/zoneinfo/${conf[TIMEZONE]} ]] || die "TIMEZONE: unknown zone ${conf[TIMEZONE]}"
   check_locale "${conf[LOCALE]}"
   [[ -s ${conf[USER_PASSWORD_FILE]} ]] || die "USER_PASSWORD_FILE: missing or empty"
@@ -427,13 +437,18 @@ EOF
   printf '%s:%s\n' "$user" "$(<"${conf[USER_PASSWORD_FILE]}")" | arch-chroot "$target" chpasswd
   arch-chroot "$target" passwd --lock root >/dev/null
   install -m 0440 /dev/stdin "$target/etc/sudoers.d/10-wheel" <<<'%wheel ALL=(ALL:ALL) ALL'
+  # Files sent with Taildrop land in this account's Downloads (ADR 0058).
+  arch-chroot "$target" systemctl enable --quiet \
+    "$(systemd-escape --template=subcult-taildrop@.service "$user")"
   # Failed passwords (ADR 0063): 10 lock the account for 2 minutes, not
   # Arch's 3 for 10. The pam package owns the file, so it is copied here.
   install -m 0644 "$target/usr/share/subcult/default/security/faillock.conf" "$target/etc/security/faillock.conf"
   # The greeter offers the last user (ADR 0030); SDDM records one only after
-  # a sign-in, so start with the account made here. The sddm package made
-  # the directory, which is the sddm user's home.
-  printf '[Last]\nUser=%s\n' "$user" >"$target/var/lib/sddm/state.conf"
+  # a sign-in, so start with the account made here. The greeter has no session
+  # picker and signs in to the last session, which is otherwise the first
+  # file in wayland-sessions (hyprland-uwsm.desktop); SDDM matches it by full
+  # path. The sddm package made the directory, which is the sddm user's home.
+  printf '[Last]\nUser=%s\nSession=/usr/share/wayland-sessions/subarchy.desktop\n' "$user" >"$target/var/lib/sddm/state.conf"
   # The interactive shell setup (ADR 0041): the user's files source
   # Subarchy's and hold the user's own lines after that. (An empty
   # ~/.zshrc would also do to keep zsh's first-run wizard away.)
@@ -538,7 +553,7 @@ main() {
     case $1 in
       --config) config=${2:?--config needs a file}; shift 2 ;;
       --yes) yes=1; shift ;;
-      -h | --help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      -h | --help) sed -n '2,/^set -euo pipefail/{/^set -euo/d;s/^# \{0,1\}//;p}' "$0"; exit 0 ;;
       *) die "unknown argument $1" ;;
     esac
   done

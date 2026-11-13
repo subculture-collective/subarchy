@@ -449,7 +449,7 @@ func main() {
 	}
 	e := env{
 		lsblk: func() ([]byte, error) {
-			return exec.Command("lsblk", "-J", "-b", "-o", "NAME,PATH,SIZE,TYPE,MODEL,TRAN,RO,FSTYPE,LABEL").Output()
+			return exec.Command("lsblk", "-J", "-b", "-o", "NAME,PATH,SIZE,TYPE,MODEL,TRAN,RO,RM,FSTYPE,LABEL").Output()
 		},
 		installMedia: installMedium,
 		zoneinfo:     "/usr/share/zoneinfo",

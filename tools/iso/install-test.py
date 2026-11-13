@@ -598,11 +598,11 @@ def boot(disk: Path, vars_file: Path) -> bool:
         results["greeter_user"] = serial.run(f"{sudo} cat /var/lib/sddm/state.conf")
         # Nothing of the desktop runs for the greeter's sddm user: no bar,
         # idle or clipboard service, no graphical-session.target, no
-        # Hyprland update window. The bar once came up about 15 s in.
+        # Hyprland update or donation window. The bar once came up about 15 s in.
         time.sleep(20)
         results["greeter_session"] = serial.run(
             "echo PROCS=$(pgrep -u sddm -fc 'quickshell|hypridle|wl-paste|subcult-');"
-            " echo UPDATE=$(pgrep -fc hyprland-update-screen);"
+            " echo UPDATE=$(pgrep -fc 'hyprland-(update|donate)-screen');"
             " echo MANAGER=$(systemctl is-active user@$(id -u sddm).service);"
             f" echo TARGET=$({sudo} -u sddm XDG_RUNTIME_DIR=/run/user/$(id -u sddm)"
             " systemctl --user is-active graphical-session.target hyprland-session.target | tr '\\n' ' ')")
@@ -621,10 +621,11 @@ def boot(disk: Path, vars_file: Path) -> bool:
             60,
         )
         results["uwsm"] = serial.run("systemctl --user list-units --plain --no-legend 'wayland-wm@*'")
-        # No upstream update or donation window, in the session or the greeter.
+        # The session turns off upstream's update news and donation request,
+        # and neither window runs (the greeter's were counted above).
         results["hypr_news"] = serial.run(
             "hyprctl -i 0 getoption ecosystem:no_update_news; hyprctl -i 0 getoption ecosystem:no_donation_nag;"
-            " echo UPDATE=$(pgrep -fc hyprland-update-screen)")
+            " echo UPDATE=$(pgrep -fc 'hyprland-(update|donate)-screen')")
         # The desktop shell (shell and look design, Task 16).
         results["shell_active"] = wait_for(
             serial, "systemctl --user is-active subcult-shell.service | grep -qx active && echo ACTIVE", 90)

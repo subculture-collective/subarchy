@@ -56,7 +56,7 @@ Item {
       greeter.authenticating = false
       greeter.startingSession = false
       greeter.message = ""
-      greeter.pamText = ""
+      greeter.pamLines = []
       greeter.afterPamText = false
       sddm.calls = 0
       sddm.lastPassword = ""
@@ -118,11 +118,24 @@ Item {
       greeter.login()
       sddm.informationMessage("Authentication failure")
       sddm.loginFailed()
+      verify(greeter.authenticating, "the check is not over until the second loginFailed")
+      sddm.loginFailed()
       verify(!greeter.authenticating)
       compare(greeter.message, "That password didn't work. Try again.")
       password.text = "next"
       sddm.loginFailed()
-      compare(password.text, "next", "the second loginFailed of one attempt keeps what was typed since")
+      compare(password.text, "next", "a loginFailed after the attempt keeps what was typed since")
+    }
+
+    // PAM translates its general result; the greeter knows it by position.
+    function test_translatedGeneralLine() {
+      password.text = "fixture-password"
+      greeter.login()
+      sddm.informationMessage("Fehler bei der Authentifizierung")
+      sddm.loginFailed()
+      sddm.loginFailed()
+      verify(!greeter.authenticating)
+      compare(greeter.message, "That password didn't work. Try again.")
     }
 
     // faillock's lines arrive, each with a loginFailed, while PAM still runs;

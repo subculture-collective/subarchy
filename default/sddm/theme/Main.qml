@@ -21,7 +21,7 @@ Rectangle {
   // What PAM said during this attempt (faillock's "The account is locked
   // due to 10 failed logins." and "(2 minutes left to unlock)"), shown
   // instead of the general line, as the lock screen does.
-  property string pamText: ""
+  property var pamLines: []
   property bool afterPamText: false
 
   color: root.base
@@ -34,7 +34,7 @@ Rectangle {
       return
     }
     root.message = ""
-    root.pamText = ""
+    root.pamLines = []
     root.afterPamText = false
     root.authenticating = true
     sddm.login(user.text.trim(), password.text, sessionModel.lastIndex)
@@ -252,13 +252,19 @@ Rectangle {
 
   // SDDM sends each PAM error line as informationMessage followed by
   // loginFailed while PAM is still running, then the result of the whole
-  // check (pam_strerror's "Authentication failure") the same way, then one
-  // more loginFailed. A loginFailed right after a PAM line shows that line
-  // and keeps the form busy; the attempt ends on the next loginFailed.
+  // check (pam_strerror's "Authentication failure", in the system
+  // language) the same way, then one more loginFailed. A loginFailed right
+  // after a PAM line shows the lines so far and keeps the form busy; a
+  // loginFailed with no line before it ends the attempt, and the last line
+  // was that general result, which says no more than the greeter's own.
   Timer {
     id: settle
     interval: 10000
     onTriggered: root.endAttempt()
+  }
+
+  function pamMessage(lines) {
+    return lines.filter(line => line !== "").join(" ").slice(0, 300)
   }
 
   function endAttempt() {
@@ -277,23 +283,24 @@ Rectangle {
       if (!root.authenticating)
         return
       const line = String(message || "").replace(/[\u0000-\u001f\u007f]+/g, " ").trim()
-      // The general result says no more than the line the greeter shows.
-      root.afterPamText = line !== "" && line !== "Authentication failure"
-      if (root.afterPamText)
-        root.pamText = ((root.pamText ? root.pamText + " " : "") + line).slice(0, 300)
+      root.pamLines = root.pamLines.concat([line])
+      root.afterPamText = true
     }
     function onLoginFailed() {
       if (!root.authenticating)
         return
-      root.message = root.pamText || "That password didn't work. Try again."
+      const general = "That password didn't work. Try again."
       if (root.afterPamText) {
         root.afterPamText = false
+        root.message = root.pamMessage(root.pamLines) || general
         settle.restart()
         return
       }
+      root.message = root.pamMessage(root.pamLines.slice(0, -1)) || general
       root.endAttempt()
     }
     function onLoginSucceeded() {
+      settle.stop()
       root.startingSession = true
       password.text = ""
     }

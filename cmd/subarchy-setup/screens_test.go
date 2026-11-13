@@ -252,6 +252,34 @@ func TestZones(t *testing.T) {
 	}
 }
 
+// A failed install's reason comes from its log: subarchy-install's own
+// message before a cleanup note after it, else the last tool error near
+// the end, but not a mirror error from long before.
+func TestFailReason(t *testing.T) {
+	mirror := "error: failed retrieving file 'a.pkg' from mirror : timed out\n"
+	quiet := strings.Repeat("installing x...\n", failTail)
+	for _, c := range []struct{ log, step, why string }{
+		{"", "", ""},
+		{">> partitioning /dev/vda\n>> encrypting\nsubarchy-install: partitions did not appear\n" +
+			"subarchy-install: could not close the encrypted volume; before another try run: cryptsetup close root\n",
+			"Encrypting the disk", "partitions did not appear"},
+		{">> installing packages\n" + mirror + "Packages (2) a b\n" + quiet + "\x1b[1m==> ERROR:\x1b[0m module not found\n",
+			"Installing packages (2 of 2)", "module not found"},
+		{">> installing packages\n" + mirror + quiet, "Installing packages", ""},
+		{"subarchy-install: DISK /dev/vda has mounted partitions\n", "", "DISK /dev/vda has mounted partitions"},
+	} {
+		step, why := failReason(c.log)
+		if step != c.step || why != c.why {
+			t.Errorf("failReason(%.40q) = %q, %q; want %q, %q", c.log, step, why, c.step, c.why)
+		}
+	}
+	got := wrap("Subarchy installation stopped: an encrypted volume named root is already open", 30)
+	want := []string{"Subarchy installation stopped:", "an encrypted volume named root", "is already open"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("wrap = %q", got)
+	}
+}
+
 func TestProgressOf(t *testing.T) {
 	for _, c := range []struct {
 		log   string
@@ -317,7 +345,8 @@ func TestScreensInstallEnd(t *testing.T) {
 		e.installLog = filepath.Join(t.TempDir(), "install.log")
 		os.WriteFile(e.installLog, []byte("old run\n>> finishing\n"), 0o644)
 		e.logTail = func(int) []string {
-			return []string{"error: target not found: nope", "\x1b[1;33mWARNING\x1b[0m: colour"}
+			t.Error("the failure screen read the whole log, earlier runs included")
+			return nil
 		}
 		var did []string
 		s, g, out := testScreens(t, append(append([]string{}, answers...), extra...)...)
@@ -355,6 +384,9 @@ func TestScreensInstallEnd(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.WriteString(">> partitioning /dev/vda\n")
+			if fail {
+				f.WriteString("\x1b[1;33mWARNING\x1b[0m: colour\nerror: target not found: nope\n")
+			}
 			f.Close()
 			if fail {
 				return errors.New("exit status 1")
@@ -377,8 +409,12 @@ func TestScreensInstallEnd(t *testing.T) {
 		t.Error("progress read an earlier run's log")
 	}
 	code, did, out = setupRun([]string{"View the full log", "Power off", "Open a shell"}, true)
-	if code != 1 || len(did) != 2 || did[0] != "log" || did[1] != "poweroff" || !strings.Contains(out, "installation stopped: exit status 1") ||
-		!strings.Contains(out, "target not found: nope") || !strings.Contains(out, "WARNING: colour") || strings.Contains(out, "[1;33m") {
+	// The reason is what the log said, not the exit status, and the log
+	// lines shown are this run's.
+	if code != 1 || len(did) != 2 || did[0] != "log" || did[1] != "poweroff" ||
+		!strings.Contains(out, "installation stopped: target not found: nope") ||
+		!strings.Contains(out, "It stopped at this step: Partitioning the disk") || !strings.Contains(out, "WARNING: colour") ||
+		strings.Contains(out, "[1;33m") || strings.Contains(out, "old run") || strings.Contains(out, "exit status 1") {
 		t.Errorf("failure: exit %d, did %v:\n%s", code, did, out)
 	}
 	if !strings.HasSuffix(out, "\x1b]R\x1b[2J\x1b[H") {

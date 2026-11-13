@@ -418,9 +418,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer, e env, secret func() 
 		// Full screen: the install view in place of the raw output.
 		stop := e.screens.progress(e.installLog)
 		err := exec(conf, true)
-		stop()
+		runLog := stop()
 		if err != nil {
-			e.screens.failedScreen(e, err)
+			e.screens.failedScreen(e, err, runLog)
 			return 1
 		}
 		e.screens.finishedScreen(e, time.Since(started))
@@ -475,8 +475,18 @@ func main() {
 		cmd := exec.Command("subarchy-install", "--config", conf, "--yes")
 		if !quiet {
 			cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+			return cmd.Run()
 		}
-		return cmd.Run()
+		// Under the install view the output goes only to the log. What
+		// subarchy-install says before its log begins (a disk it refuses)
+		// goes to stderr, and becomes the failure screen's reason.
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		if _, why := failReason(stderr.String()); err != nil && why != "" {
+			return errors.New(why)
+		}
+		return err
 	}
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, e, secret, installer))
 }

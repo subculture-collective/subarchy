@@ -1,3 +1,3 @@
 # config
 
-User configuration templates that the installer copies into `~/.config` (Hyprland, terminals, the shell's `shell.json`, menus, hooks). Omarchy counterpart: `/usr/share/omarchy/config/`.
+An unused placeholder, kept so the layout mirrors Omarchy's (`/usr/share/omarchy/config/`). Subarchy's defaults live in [`default/`](../default/README.md), which the installer and the package read.

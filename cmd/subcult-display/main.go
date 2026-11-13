@@ -272,16 +272,21 @@ func (a *app) watch(store display.Store) int {
 	// A profile that no longer applies (a mode the monitor stopped offering)
 	// is reported, not fatal: exiting would restart the service into the
 	// same failure until systemd's start limit stops it for the session.
-	// apply and syncLid print their own errors.
-	if p, ok := store.Match(ms); ok {
-		a.apply(p, ms, false)
+	// apply and syncLid print their own errors. A layout counts as handled
+	// only once both worked, so a failure is tried again at the next
+	// monitor event, also for the same monitors.
+	ok := true
+	if p, found := store.Match(ms); found {
+		ok = a.apply(p, ms, false) == 0
 	}
-	a.syncLid()
+	if a.syncLid() != 0 {
+		ok = false
+	}
 	debounce := time.Duration(store.Debounce) * time.Millisecond
 	if debounce <= 0 {
 		debounce = display.DefaultDebounceMs * time.Millisecond
 	}
-	last := display.Identity(ms)
+	last, handled := display.Identity(ms), ok
 	sc := bufio.NewScanner(conn)
 	// windowtitlev2>> lines carry whole window titles.
 	sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
@@ -299,22 +304,24 @@ func (a *app) watch(store display.Store) int {
 			continue
 		}
 		id := display.Identity(ms)
-		if len(last) == len(id) && strings.Join(last, "\x00") == strings.Join(id, "\x00") {
+		if handled && len(last) == len(id) && strings.Join(last, "\x00") == strings.Join(id, "\x00") {
 			continue
 		}
-		last = id
+		last, handled = id, false
 		store, err = display.Load(a.store) // the user may have saved a profile meanwhile
 		if err != nil {
 			fmt.Fprintf(a.stderr, "subcult display: %v\n", err)
 			continue
 		}
-		p, ok := store.Match(ms)
-		if !ok {
+		ok := true
+		if p, found := store.Match(ms); !found {
 			fmt.Fprintf(a.stdout, "monitors changed (%s): no saved profile, left as is\n", strings.Join(id, "; "))
 		} else {
-			a.apply(p, ms, false)
+			ok = a.apply(p, ms, false) == 0
 		}
-		a.syncLid()
+		if a.syncLid() == 0 && ok {
+			handled = true
+		}
 	}
 	// A read error exits non-zero so Restart=on-failure brings it back.
 	if err := sc.Err(); err != nil {

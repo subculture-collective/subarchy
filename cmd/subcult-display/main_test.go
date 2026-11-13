@@ -150,6 +150,41 @@ func TestWatchSurvivesAFailedApply(t *testing.T) {
 	}
 }
 
+// A layout that failed to apply is not taken as handled: the next monitor
+// event for the same monitors (Hyprland's v2 line, say) tries again.
+func TestWatchRetriesAFailedApply(t *testing.T) {
+	a, h, out, errOut := harness(t)
+	a.run([]string{"profile", "save", "home-dock"})
+	h.monitors = laptopJSON
+	a.run([]string{"profile", "save", "laptop"})
+	h.monitors = dockJSON
+	h.evals, h.dispatch = nil, nil
+	h.failEvals = 1 // the dock profile at startup
+	a.events = func() (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader("monitoraddedv2>>1,DP-3,LG\nmonitorremoved>>DP-3\nmonitorremovedv2>>1,DP-3,LG\n")), nil
+	}
+	// Per event: the monitors then, and how many evaluations fail.
+	layouts := []string{dockJSON, laptopJSON, laptopJSON}
+	fails := []int{0, 1, 0}
+	a.sleep = func(time.Duration) {
+		h.monitors, layouts = layouts[0], layouts[1:]
+		h.failEvals, fails = fails[0], fails[1:]
+	}
+	out.Reset()
+	if code := a.run([]string{"watch"}); code != 0 {
+		t.Fatalf("watch: %d; %s", code, errOut)
+	}
+	if strings.Count(errOut.String(), "mode not offered") != 2 {
+		t.Errorf("both failures are reported: %q", errOut.String())
+	}
+	if !strings.Contains(out.String(), "applied home-dock") {
+		t.Errorf("the dock profile that failed at startup is applied at the next event: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "applied laptop") {
+		t.Errorf("the laptop profile that failed after an event is applied at the next one: %q", out.String())
+	}
+}
+
 // A read error ends the watcher with a failure, so systemd restarts it.
 func TestWatchFailsOnAReadError(t *testing.T) {
 	a, _, _, errOut := harness(t)

@@ -3,8 +3,9 @@ GO ?= go
 BUILD := build
 VERSION ?= 0.0.0
 LDFLAGS := -X git.subcult.tv/subculture-collective/subarchy/internal/dispatch.Version=$(VERSION)
-# Vendored upstream scripts under packaging/aur are not ours to lint.
-SHELL_SCRIPTS := $(shell git ls-files '*.sh' 'bin/subcult-*' 2>/dev/null | grep -vE '^packaging/aur/|^bin/subcult-screensaver-render$$')
+# Vendored upstream scripts in packaging/aur/<name>/ are not ours to lint;
+# packaging/aur/build.sh is.
+SHELL_SCRIPTS := $(shell git ls-files '*.sh' 'bin/subcult-*' 2>/dev/null | grep -vE '^packaging/aur/[^/]+/|^bin/subcult-screensaver-render$$')
 QT6BIN ?= /usr/lib/qt6/bin
 QT6QML ?= /usr/lib/qt6/qml
 .DEFAULT_GOAL := verify

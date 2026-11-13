@@ -19,8 +19,10 @@ pacman -T go >/dev/null 2>&1 || nodeps=(--nodeps)
   BUILDDIR="$work/build" PKGDEST="$work/out" SRCDEST="$work/src" \
     makepkg --force --cleanbuild --noconfirm "${nodeps[@]}" >"$work/makepkg.log" 2>&1
 ) || {
-  # A failed test is named far above the log's end: show those lines first.
-  grep -n -B2 -A25 -e '--- FAIL' -e '^panic:' "$work/makepkg.log" | head -120 >&2 || true
+  # A failed test, vet error or [setup failed] package is named far above the
+  # log's end: show everything check() printed except passing packages.
+  sed -n '/Starting check()/,$p' "$work/makepkg.log" | grep -Ev '^(ok|\?) ' | tail -80 >&2 || true
+  # A failure in build() never reaches check(); its cause is at the end.
   tail -30 "$work/makepkg.log" >&2
   fail "makepkg failed"
 }

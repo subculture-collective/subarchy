@@ -22,7 +22,8 @@ this directory to `/usr/share/subcult/default/`. Omarchy counterpart:
 | `launcher/favorites.json` | The launcher's home-screen favorites, by desktop entry id; the user's `~/.config/subcult/launcher/favorites.json` replaces the list (ADR 0057) |
 | `fontconfig/` | The three font roles (→ `/usr/share/fontconfig/conf.avail/`, linked from `/etc/fonts/conf.d/`); includes the user's `~/.config/subcult/fonts.conf` first |
 | `cursor/` | The Subarchy cursor's SVG shapes and `shapes.tsv`; `subcult cursor` builds them (the package ships the lavender theme in `/usr/share/icons/subcult-cursor/`) |
-| `gtk/` | GSettings override (→ `/usr/share/glib-2.0/schemas/`) and GTK 3/4 `settings.ini` (→ `/etc/xdg/`) |
+| `gtk/` | GSettings override (→ `/usr/share/glib-2.0/schemas/`) and GTK 3/4 `settings.ini` (→ `/etc/xdg/`); theme adw-gtk3-dark, which takes Pult's colours (ADR 0037) |
+| `kde/` | `kdeglobals` (→ `/etc/xdg/`) selecting the `Pult` colour scheme for KDE apps, and `Pult.colors` (→ `/usr/share/color-schemes/`), the default theme's copy until `pult apply` writes the user's (ADR 0037) |
 | `kitty/` | kitty's system config and the Subcult Ink colours (→ `/etc/xdg/kitty/`) |
 | `nvim/` | Subcult Ink for Neovim (→ `/usr/share/nvim/site/`) |
 | `system/` | systemd units, drop-ins and rules, including `subcult-shell.service` |

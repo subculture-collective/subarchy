@@ -59,9 +59,10 @@ for path in usr/bin/subcult-screensaver-render usr/share/subcult/screensaver/ind
   grep -qx "$path" <<<"$list" || fail "missing $path"
 done
 
-# Look layer (shell and look design): GTK, kitty and Neovim defaults.
+# Look layer (shell and look design): GTK, KDE, kitty and Neovim defaults.
 for path in usr/share/glib-2.0/schemas/90-subarchy.gschema.override etc/xdg/gtk-3.0/settings.ini \
-  etc/xdg/gtk-4.0/settings.ini etc/xdg/kitty/kitty.conf etc/xdg/kitty/subcult-ink.conf \
+  etc/xdg/gtk-4.0/settings.ini etc/xdg/kdeglobals usr/share/color-schemes/Pult.colors \
+  etc/xdg/kitty/kitty.conf etc/xdg/kitty/subcult-ink.conf \
   usr/share/nvim/site/colors/subcult-ink.lua usr/share/nvim/site/plugin/subarchy-colors.lua; do
   mode=$(bsdtar -tvf "$pkg" "$path" 2>/dev/null | cut -c1-10) || true
   [[ $mode == -rw-r--r-- ]] || fail "missing $path or mode ${mode:-none}, want 0644"

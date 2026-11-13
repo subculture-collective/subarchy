@@ -1,0 +1,7 @@
+# Subarchy (ADR 0037): KDE apps such as Dolphin, Okular and Ark use the
+# colour scheme Pult writes from the palette, ~/.local/share/color-schemes/
+# Pult.colors; outside Plasma they would otherwise pick Breeze. Until Pult
+# has written it, /usr/share/color-schemes/Pult.colors (SUBCULT Minimal)
+# stands in.
+[UiSettings]
+ColorScheme=Pult

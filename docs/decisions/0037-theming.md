@@ -4,7 +4,7 @@ type: decision
 status: accepted
 adr: 37
 created: 2026-11-06
-updated: 2026-11-07
+updated: 2026-11-12
 tags: [decision, adr, shell, theme, brand]
 aliases: [ADR 0037, D5, Theming, Themes, Theme Tender]
 ---
@@ -202,5 +202,39 @@ which Subarchy does not use.
   selection changed. The VM test applies a palette twice: the first run
   rebuilds, the second changes nothing. `--elevate sudo` is for scripts
   and that test, where no polkit agent runs.
+
+- 2026-11-12: Qt/KDE and GTK apps checked in practice (issues #77, #78),
+  which corrects two claims of the 2026-11-08 notes. Measured on Arch in a
+  container with Pult applying `subcult-minimal`, each app captured under
+  Xvfb or a headless sway:
+  - GTK: Pult's named colours do not recolour Adwaita's GTK 3 theme or
+    GTK 4's built-in Adwaita-dark, whose colours are built in (a GTK 3
+    window stayed `#F6F5F4`, plain GTK 4 `#353535`). Subarchy now uses
+    adw-gtk3-dark (`adw-gtk-theme`, in the desktop set), which draws GTK 3
+    and plain GTK 4 apps from those names: both took base `#100B19`.
+    libadwaita apps follow on either. Without Pult's file, plain GTK 4
+    apps on adw-gtk3-dark show light; with it, as after every install,
+    they show the palette.
+  - KDE: the gtk3 platform theme gives Qt apps the palette, but KDE
+    Frameworks 6 apps (Dolphin, Okular, Ark) replace it with BreezeDark
+    outside Plasma unless kdeglobals names a colour scheme. Pult gets a
+    `kde` entry that writes `~/.local/share/color-schemes/Pult.colors`
+    from the palette, and Subarchy ships `[UiSettings] ColorScheme=Pult`
+    in `/etc/xdg/kdeglobals` plus a copy of the scheme for `subcult-minimal`
+    in `/usr/share/color-schemes/` for before `pult apply` (the user's copy
+    wins). Dolphin then drew base and mantle, with mauve icons.
+  - swayimg: Pult gets a `swayimg` entry (5.5 and later): an owned
+    `pult.lua` run by a `dofile()` line in `init.lua`. Viewer and gallery
+    took base, the gallery border mauve.
+
+  The two entries are in pult#34 (subculture-collective/pult on GitHub),
+  so they reach an install with the Pult release after it. The VM test
+  installs Dolphin, applies the profile again and checks Dolphin and a
+  GTK 3 window, full screen, for the palette's colours. Still not covered
+  by a Pult entry: VS Code (settings.json needs JSONC key editing, which
+  Pult's `keys` method lacks) and Obsidian (a theme per vault). fastfetch
+  uses the terminal's colours as it is, and Chromium's colour policy is
+  the `subcult theme apply-system` part above; it is written only where
+  `/etc/chromium` exists when that runs.
 
 Related: [[decision-map|Decision map]] · [[0048-config-ownership|ADR 0048]] · [[brand-identity|Brand identity]] · [[0038-wallpaper|ADR 0038]] · [[0039-fonts-icons|ADR 0039]]

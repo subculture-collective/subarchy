@@ -150,6 +150,33 @@ class LockCrash(unittest.TestCase):
         self.assertFalse(install_test.lock_crash_ok(crash(end="active\n")))
 
 
+APP_STATE = "DOLPHIN=0\nAPPLY=0\nGTK=1\nKDE=1\n'adw-gtk3-dark'\n"
+APP_WINDOWS = {"dolphin": "\tclass: org.kde.dolphin\n\tfullscreen: 2\n", "gtk": "\tclass: python3\n\tfullscreen: 2\n"}
+
+
+def apps(**changes) -> dict:
+    """A passing app-colours record, with some of its parts replaced."""
+    return {"state": APP_STATE, "windows": dict(APP_WINDOWS), "themed": {"dolphin": True, "gtk": True}} | changes
+
+
+class AppColours(unittest.TestCase):
+    def test_both_apps_full_screen_in_the_palette_pass(self):
+        self.assertTrue(install_test.app_colours_ok(apps()))
+
+    def test_an_app_in_its_own_colours_fails(self):
+        self.assertFalse(install_test.app_colours_ok(apps(themed={"dolphin": False, "gtk": True})))
+        self.assertFalse(install_test.app_colours_ok(apps(themed={"dolphin": True, "gtk": False})))
+
+    def test_a_missing_target_or_the_old_gtk_theme_fails(self):
+        for old, new in (("KDE=1", "KDE=0"), ("GTK=1", "GTK="), ("APPLY=0", "APPLY=1"), ("'adw-gtk3-dark'", "'Adwaita-dark'")):
+            with self.subTest(old=old):
+                self.assertFalse(install_test.app_colours_ok(apps(state=APP_STATE.replace(old, new))))
+
+    def test_a_window_that_never_showed_or_stayed_tiled_fails(self):
+        self.assertFalse(install_test.app_colours_ok(apps(windows=APP_WINDOWS | {"dolphin": ""})))
+        self.assertFalse(install_test.app_colours_ok(apps(windows=APP_WINDOWS | {"gtk": "\tclass: python3\n\tfullscreen: 0\n"})))
+
+
 class QuietestMinute(unittest.TestCase):
     """The idle sample: other programs waking the shell only add to a minute."""
 

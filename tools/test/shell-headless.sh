@@ -656,7 +656,8 @@ for _ in $(seq 10); do [[ $(sfield current) == *"'font.ui': 'Inter'"* ]] && brea
 if command -v wtype >/dev/null; then
   [[ $(settings focusField bar.minimal) == true ]] || fail "the settings panel has no bar.minimal field"
   sleep 0.5
-  wtype -d 20 'subcult.workspaces'
+  # -s: let the virtual keyboard's keymap settle, or the first key is lost.
+  wtype -s 500 -d 20 'subcult.workspaces'
   for _ in $(seq 10); do [[ $(sfield pending) == *"'bar.minimal': ['subcult.workspaces']"* ]] && break; sleep 0.3; done
   [[ $(sfield pending) == *"'bar.minimal': ['subcult.workspaces']"* ]] || fail "a widget id typed key by key did not reach pending: $(settings state)"
 fi

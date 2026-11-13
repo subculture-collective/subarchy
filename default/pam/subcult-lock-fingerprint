@@ -11,7 +11,9 @@
 # a password unlock does. Fingerprint misses are not counted, so a wrong
 # finger cannot lock the password out. Each line is requisite or required
 # and no other module can grant access, so only a matching finger unlocks.
-auth     requisite  pam_faillock.so preauth
+# nodelay drops pam_faillock's 2-second wait after a failure, so a missing
+# or broken reader fails at once and the lock backs off from it.
+auth     requisite  pam_faillock.so preauth nodelay
 auth     requisite  pam_fprintd.so
 auth     required   pam_faillock.so authsucc
 account  include    system-auth

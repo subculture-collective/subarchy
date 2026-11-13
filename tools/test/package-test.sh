@@ -53,7 +53,7 @@ fpstack=$(bsdtar -xOf "$pkg" etc/pam.d/subcult-lock-fingerprint)
 grep -Eq '^auth +requisite +pam_fprintd\.so$' <<<"$fpstack" || fail "the fingerprint stack does not require pam_fprintd"
 # Only pam_fprintd can say yes; pam_faillock can only refuse (ADR 0063).
 grep -E '^auth' <<<"$fpstack" | grep -Ev '^auth +(requisite|required) +pam_(fprintd|faillock)\.so( |$)' && fail "the fingerprint stack has another way in"
-grep -Eq '^auth +requisite +pam_faillock\.so preauth$' <<<"$fpstack" || fail "the fingerprint stack ignores a faillock lockout"
+grep -Eq '^auth +requisite +pam_faillock\.so preauth nodelay$' <<<"$fpstack" || fail "the fingerprint stack ignores a faillock lockout"
 
 # The lock ships videos, stills and the captures used to recolour them.
 for name in beams decrypt matrix; do

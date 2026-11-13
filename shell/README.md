@@ -101,7 +101,9 @@ desktop-audio capture links from a sink and shows nothing. A recorder that
 uses the compositor's capture protocol directly (wf-recorder over
 wlr-screencopy) makes no PipeWire stream; Hyprland's `screencast` events
 light the screen mark for it, from the first frames until half a second
-after the last. A capture already running when the shell starts is missed.
+after the last. The count is kept for the whole shell, so a bar added
+later (a monitor plugged in, a reloaded widget) shows it too; a capture
+already running when the shell starts is missed.
 ## Motion
 
 One setting, `~/.config/subcult/motion.json` with `{"mode": "auto"}`, `"on"`

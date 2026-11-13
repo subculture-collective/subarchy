@@ -479,18 +479,18 @@ fi
 # backlight or brightnessctl, which CI lacks).
 HOME=$home1 quickshell ipc -p "$shell" call subcult.osd flash capslock >/dev/null 2>&1 ||
   fail "the OSD has no IPC handler"
+# It hides after 1.5 s, so the status is read first, then the shots.
+st=$(status "$home1")
+[[ $(json 'd.get("osd")') == capslock ]] || fail "the OSD did not show: $st"
 # Drawn as well as reported: mantle just inside the 280x40 box's top-left
-# corner (centred, 96 px above the bottom of the 1280x800 output). It hides
-# after 1.5 s, so the shots come first; the first frame lands a moment
-# after the IPC call returns.
+# corner (centred, 96 px above the bottom of the 1280x800 output). The
+# first frame lands a moment after the IPC call returns.
 for _ in 1 2 3 4 5; do
   shot HEADLESS-1
   [[ $(pixel 503 667) == 0B0812 ]] && break
   sleep 0.1
 done
 [[ $(pixel 503 667) == 0B0812 ]] || fail "the OSD is reported but not drawn (got $(pixel 503 667))"
-st=$(status "$home1")
-[[ $(json 'd.get("osd")') == capslock ]] || fail "the OSD did not show: $st"
 sleep 2
 shot HEADLESS-1
 [[ $(pixel 503 667) == 100B19 ]] || fail "the OSD's surface stayed after it hid (got $(pixel 503 667))"

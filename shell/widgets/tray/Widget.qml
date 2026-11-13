@@ -24,7 +24,12 @@ BarWidget {
     spacing: 6
 
     Repeater {
-      model: root.items
+      // ScriptModel keeps existing slots (and an open menu) when an item's
+      // status changes; the filtered array is new on every change, and a
+      // plain array would rebuild them all.
+      model: ScriptModel {
+        values: root.items
+      }
       delegate: Item {
         id: slot
         required property var modelData

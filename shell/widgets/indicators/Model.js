@@ -19,8 +19,8 @@
 // wlr-screencopy, toplevel export) makes no PipeWire node. Hyprland posts
 // `screencast>>1,<type>` when such a session starts sending frames and
 // `screencast>>0,<type>` when it stops, once per session; screencasts()
-// counts the open ones. A session already running when the shell started
-// is not seen.
+// counts the open ones, kept shell-wide by services/Screencasts.qml. A
+// session already running when the shell started is not seen.
 
 // PwNodeType flags.
 const AUDIO = 1

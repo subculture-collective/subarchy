@@ -20,7 +20,8 @@ set -euo pipefail
 # claim STAGED NAME: hard-link STAGED to a free name in $dir based on NAME,
 # then drop STAGED. link(2) fails on a taken name, so nothing is overwritten
 # even when another program writes to Downloads at the same time. A link
-# that points nowhere also takes its name. A numbered name is shortened, in
+# that points nowhere also takes its name, and so does a folder or a link
+# to one (-T: never a link inside it). A numbered name is shortened, in
 # whole characters, to stay within 255 bytes. Prints the path it took.
 claim() {
   local staged=$1 name=$2 base ext target i
@@ -35,7 +36,7 @@ claim() {
       done
       target=$base-$i$ext
     fi
-    if ln -- "$staged" "$dir/$target" 2>/dev/null; then
+    if ln -T -- "$staged" "$dir/$target" 2>/dev/null; then
       rm -f -- "$staged"
       printf '%s\n' "$dir/$target"
       return 0
@@ -91,7 +92,7 @@ as_user() {
     env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" "$@"
 }
 
-# Hands the files of every finished get to the user. A file that cannot be
+# Hands the files in every done.* folder to the user. A file that cannot be
 # placed stays for the next round.
 deliver() {
   local batch staged
@@ -106,26 +107,53 @@ deliver() {
   done
 }
 
-# `tailscale file get` writes each file under its final name and then drops
-# it from tailscaled's inbox, so a get stopped halfway leaves a cut-off
-# file. Each get therefore writes into its own get.* folder, renamed to
-# done.* only once it has succeeded. A get.* folder found later is thrown
-# away: its files are still in the inbox and come again. This is also why
-# it is `--wait` once per round and not `--loop`: the end of a get is what
-# says its files are whole.
-rm -rf -- "$spool"/get.*
+# keep GET: save what a get that did not finish wrote. `tailscale file get`
+# writes each file under its final name, closes it, logs it with --verbose
+# ("wrote NAME as PATH (N bytes)") and only then drops it from tailscaled's
+# inbox, one file at a time. A file the log names is whole and may be gone
+# from the inbox, so it moves to a done.* folder for delivery. Any other
+# file was cut off halfway and is still in the inbox; it comes again, so it
+# is dropped.
+keep() {
+  local get=$1 line name out
+  out=$spool/done.${1##*/get.}
+  mkdir -p -- "$out"
+  if [[ -f $get.log ]]; then
+    while IFS= read -r line || [[ -n $line ]]; do
+      # "waiting for file..." has no line end, so a line can start with it.
+      [[ $line == *" as $get/"*" bytes)" ]] || continue
+      name=${line#*" as $get/"}
+      name=${name%" ("*" bytes)"}
+      if [[ $name != */* && -f $get/$name ]]; then
+        mv -- "$get/$name" "$out/"
+      fi
+    done <"$get.log"
+  fi
+  rm -rf -- "$get" "$get.log"
+}
+
+# Each get writes into its own get.* folder, renamed to done.* once it has
+# succeeded. A get that failed, or one an earlier run left when it was
+# stopped, keeps the files it finished. It is `--wait` once per round and
+# not `--loop`: the end of a get is what says its files are whole.
+for get in "$spool"/get.*; do
+  if [[ -d $get ]]; then keep "$get"; fi
+done
+rm -f -- "$spool"/get.*.log
 deliver
 last=
 while true; do
   get=$(mktemp -d "$spool/get.XXXXXX")
-  if err=$(tailscale file get --wait --conflict=rename "$get" 2>&1 >/dev/null); then
+  if err=$(tailscale file get --wait --verbose --conflict=rename "$get" 2>&1 >"$get.log"); then
     mv -- "$get" "$spool/done.${get##*/get.}"
+    rm -f -- "$get.log"
     last=
     deliver
     ((once)) && exit 0
     continue
   fi
-  rm -rf -- "$get"
+  keep "$get"
+  deliver
   # Signed out, tailscaled refuses at once ("no storage directory"); the
   # same refusal is logged once.
   [[ $err == "$last" ]] || echo "taildrop-receive: $err" >&2

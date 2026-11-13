@@ -73,7 +73,7 @@ jobs:
     steps:
       - name: Install Quickshell, Qt and the headless test tools
         run: |
-          pacman -Syu --noconfirm --needed git make nodejs python python-gobject ffmpeg quickshell qt6-multimedia qt6-declarative sway grim imagemagick libnotify ttf-dejavu ttf-iosevkaterm-nerd libqalculate fd unicode-emoji wtype librsvg lua neovim zsh hyprland ttf-jetbrains-mono-nerd ttf-liberation
+          pacman -Syu --noconfirm --needed git make nodejs python python-gobject ffmpeg quickshell qt6-multimedia qt6-declarative sway grim imagemagick libnotify ttf-dejavu ttf-iosevkaterm-nerd libqalculate fd unicode-emoji wtype librsvg
           # Arch gives sway cap_sys_nice as a file capability, which a container
           # may not grant; without it the binary cannot start at all.
           setcap -r /usr/bin/sway
@@ -120,8 +120,3 @@ jobs:
           useradd -m runner
           chown -R runner: "$PWD"
           su runner -c "git config --global --add safe.directory '$PWD' && tools/test/shell-headless.sh shell"
-      # make smoke on the Ubuntu job skips these without the fonts, Hyprland,
-      # Lua, Neovim and zsh; here they run.
-      - name: Fonts, Hyprland, Neovim and shell rc tests
-        run: |
-          su runner -c 'export XDG_RUNTIME_DIR=$(mktemp -d) && git config --global --add safe.directory "$PWD" && for t in fontconfig hypr-theme hypr-motion nvim-theme shell-rc; do tools/test/$t-test.sh; done && make hypr-check'

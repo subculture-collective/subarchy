@@ -481,12 +481,13 @@ UNTHEMED = {"dolphin": ("141618", "202326"), "gtk": ("222226", "353535", "F6F5F4
 PROFILE_APPLY = "pult apply -yes -profile /usr/share/subcult/default/theme/subarchy.toml >/dev/null 2>&1"
 
 
-def app_colours(serial: Serial, qmp: Path, sudo: str) -> dict:
+def app_colours(serial: Serial, qmp: Path) -> dict:
     """Dolphin and a GTK 3 window after `pult apply` (ADR 0037, issue #77).
 
-    Dolphin comes from the mirror; the default profile is applied again so
-    Pult sees it. Each app is shown full screen on an empty workspace and
-    captured; `themed` says whether the capture has the palette's colour
+    Dolphin is preinstalled (install/packages/desktop.txt); `pacman -Q`
+    confirms it. The default profile is applied again so Pult sees it.
+    Each app is shown full screen on an empty workspace and captured;
+    `themed` says whether the capture has the palette's colour
     and none of the colours the app shows unthemed. The GTK window is
     checked under the profile. Dolphin is checked under Dracula when the
     installed Pult has its `kde` entry, since the packaged scheme already
@@ -497,7 +498,7 @@ def app_colours(serial: Serial, qmp: Path, sudo: str) -> dict:
     has a `kde` entry and wrote the scheme, and the GTK theme setting.
     """
     state = serial.run(
-        f"{sudo} pacman -S --noconfirm --needed dolphin >/dev/null 2>&1; echo DOLPHIN=$?;"
+        "pacman -Q dolphin >/dev/null 2>&1; echo DOLPHIN=$?;"
         f" {PROFILE_APPLY}; echo APPLY=$?;"
         " echo GTK=$(grep -c '^@import url(\"pult.css\");$' ~/.config/gtk-3.0/gtk.css 2>/dev/null);"
         " echo ADW=$(test -d /usr/share/themes/adw-gtk3-dark/gtk-3.0 && echo 1);"
@@ -967,9 +968,8 @@ finally:
         results["pult_restore"] = serial.run(
             "pult apply -yes -profile /usr/share/subcult/default/theme/subarchy.toml >/dev/null 2>&1; echo PULT_RESTORE=$?;"
             " grep -ci '\"base\": \"#100b19\"' ~/.config/subcult/theme/palette.json", timeout=120)
-        # Qt/KDE and GTK apps in Pult's colours (issue #77), after the package
-        # count above, since it installs Dolphin.
-        results["app_colours"] = app_colours(serial, qmp, sudo)
+        # Qt/KDE and GTK apps in Pult's colours (issue #77).
+        results["app_colours"] = app_colours(serial, qmp)
         # The shell's Hyprland dispatches on a Lua config: the workspace click
         # expression (as shell/Commons/HyprDispatch.js writes it).
         results["dispatch"] = serial.run(

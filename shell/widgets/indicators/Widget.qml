@@ -1,5 +1,5 @@
 import QtQuick
-import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
 import qs.Commons
 import qs.Ui
@@ -10,7 +10,9 @@ import "../../Commons/Glyphs.js" as Glyphs
 // Small status marks: do-not-disturb, the privacy marks (microphone, camera
 // and screen in use, from PipeWire links and node flags) and keep-awake
 // (click to toggle). All are driven by events. Only the PipeWire nodes that
-// could be a video stream are tracked (see Model.js), not every stream.
+// could be a video stream are tracked (see Model.js), not every stream. A
+// recorder using the compositor's own capture protocol shows through
+// Hyprland's screencast events.
 BarWidget {
   id: root
 
@@ -24,11 +26,21 @@ BarWidget {
     sourceType: l.source ? l.source.type : 0,
     targetId: l.target ? l.target.id : -1
   })), captures)
+  // Open capture sessions of the compositor's own protocols (no PipeWire).
+  property int screencasts: 0
 
   implicitWidth: row.implicitWidth
 
   PwObjectTracker {
     objects: root.candidates
+  }
+
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) {
+      if (event.name === "screencast")
+        root.screencasts = Model.screencasts(root.screencasts, event.data)
+    }
   }
 
   Row {
@@ -59,7 +71,7 @@ BarWidget {
     }
 
     IconButton {
-      visible: root.marks.screen
+      visible: root.marks.screen || root.screencasts > 0
       glyph: Glyphs.screenShare
       color: Theme.error
       tooltip: "Screen shared or recorded"

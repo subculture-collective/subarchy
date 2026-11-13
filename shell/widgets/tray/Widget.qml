@@ -7,11 +7,13 @@ import qs.Ui
 
 // Status icons from apps (StatusNotifierItem). Left click activates, or
 // opens the menu of an item that only has a menu (nm-applet); middle click
-// is the app's secondary action; right click opens the app's menu.
+// is the app's secondary action; right click opens the app's menu. An item
+// whose status is Passive (idle, by the StatusNotifierItem spec) is hidden
+// until the app sets it Active or NeedsAttention again.
 BarWidget {
   id: root
 
-  readonly property var items: SystemTray.items ? SystemTray.items.values : [] // qmllint disable missing-property
+  readonly property var items: SystemTray.items ? SystemTray.items.values.filter(i => i.status !== Status.Passive) : [] // qmllint disable missing-property
 
   hidden: items.length === 0
   implicitWidth: row.implicitWidth

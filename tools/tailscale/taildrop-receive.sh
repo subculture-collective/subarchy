@@ -107,29 +107,35 @@ deliver() {
   done
 }
 
-# keep GET: save what a get that did not finish wrote. `tailscale file get`
-# writes each file under its final name, closes it, logs it with --verbose
-# ("wrote NAME as PATH (N bytes)") and only then drops it from tailscaled's
-# inbox, one file at a time. A file the log names is whole and may be gone
-# from the inbox, so it moves to a done.* folder for delivery. Any other
-# file was cut off halfway and is still in the inbox; it comes again, so it
-# is dropped.
+# keep GET RECORDS: save what a get that did not finish wrote. `tailscale
+# file get` writes each file under its final name, closes it, prints
+# "wrote NAME as PATH (N bytes)" (--verbose) and only then drops it from
+# tailscaled's inbox, one file at a time, whether or not that line could be
+# written. RECORDS is that output: kept in memory for a get this run made,
+# so a full disk cannot cut it short, and read back from GET.log for one an
+# earlier run left. A file it names is whole and may be gone from the
+# inbox, so it is kept. Any other file was cut off halfway and is still in
+# the inbox; it comes again, so it is dropped. GET then becomes a done.*
+# folder by a rename, which needs no new space; if even that fails, it
+# stays for the next start.
 keep() {
-  local get=$1 line name out
-  out=$spool/done.${1##*/get.}
-  mkdir -p -- "$out"
-  if [[ -f $get.log ]]; then
-    while IFS= read -r line || [[ -n $line ]]; do
-      # "waiting for file..." has no line end, so a line can start with it.
-      [[ $line == *" as $get/"*" bytes)" ]] || continue
-      name=${line#*" as $get/"}
-      name=${name%" ("*" bytes)"}
-      if [[ $name != */* && -f $get/$name ]]; then
-        mv -- "$get/$name" "$out/"
-      fi
-    done <"$get.log"
-  fi
-  rm -rf -- "$get" "$get.log"
+  local get=$1 line name file
+  local -A whole=()
+  while IFS= read -r line; do
+    # "waiting for file..." has no line end, so a line can start with it.
+    [[ $line == *" as $get/"*" bytes)" ]] || continue
+    name=${line#*" as $get/"}
+    name=${name%" ("*" bytes)"}
+    # A leading / keeps a name such as @ from reading as the whole array.
+    [[ -z $name || $name == */* ]] || whole[/$name]=1
+  done < <(printf '%s\n' "$2")
+  while IFS= read -r -d '' file; do
+    if [[ -z ${whole[/${file##*/}]+x} || -L $file || ! -f $file ]]; then
+      rm -rf -- "$file"
+    fi
+  done < <(find "$get" -mindepth 1 -maxdepth 1 -print0)
+  mv -T -- "$get" "$spool/done.${get##*/get.}" || return 0
+  rm -f -- "$get.log"
 }
 
 # Each get writes into its own get.* folder, renamed to done.* once it has
@@ -137,14 +143,24 @@ keep() {
 # stopped, keeps the files it finished. It is `--wait` once per round and
 # not `--loop`: the end of a get is what says its files are whole.
 for get in "$spool"/get.*; do
-  if [[ -d $get ]]; then keep "$get"; fi
+  [[ -d $get ]] || continue
+  records=
+  if [[ -f $get.log ]]; then records=$(<"$get.log"); fi
+  keep "$get" "$records"
 done
-rm -f -- "$spool"/get.*.log
+for log in "$spool"/get.*.log; do
+  [[ -d ${log%.log} ]] || rm -f -- "$log"
+done
 deliver
 last=
 while true; do
   get=$(mktemp -d "$spool/get.XXXXXX")
-  if err=$(tailscale file get --wait --verbose --conflict=rename "$get" 2>&1 >"$get.log"); then
+  # The output goes to memory, for keep, and to GET.log, for the next start
+  # should this one be stopped halfway. Errors come in the same stream.
+  if out=$(
+    tailscale file get --wait --verbose --conflict=rename "$get" 2>&1 | tee -- "$get.log" 2>/dev/null
+    exit "${PIPESTATUS[0]}"
+  ); then
     mv -- "$get" "$spool/done.${get##*/get.}"
     rm -f -- "$get.log"
     last=
@@ -152,10 +168,16 @@ while true; do
     ((once)) && exit 0
     continue
   fi
-  keep "$get"
+  keep "$get" "$out"
   deliver
-  # Signed out, tailscaled refuses at once ("no storage directory"); the
-  # same refusal is logged once.
+  # The error is the output without the file records. Signed out,
+  # tailscaled refuses at once ("no storage directory"); the same refusal
+  # is logged once.
+  err=
+  while IFS= read -r line; do
+    line=${line#waiting for file...}
+    [[ -z $line || $line == "wrote "*" as $get/"*" bytes)" ]] || err+=${err:+$'\n'}$line
+  done < <(printf '%s\n' "$out")
   [[ $err == "$last" ]] || echo "taildrop-receive: $err" >&2
   last=$err
   ((once)) && exit 1

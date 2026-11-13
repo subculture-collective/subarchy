@@ -28,6 +28,23 @@ function baseline(sink) {
   return { volume: sink.audio.volume, muted: sink.audio.muted }
 }
 
+// The OSD's volume state: switchTo(sink) when the default sink changes,
+// then reading(sink) at each volume or mute signal, which says whether the
+// reading is a change to show. The state lives here, not in Osd.qml, so the
+// tests cover what a switch does.
+function volumeTracker() {
+  let last = null
+  return {
+    switchTo: function (sink) { last = baseline(sink) },
+    reading: function (sink) {
+      const now = { volume: sink.audio.volume, muted: sink.audio.muted }
+      const changed = volumeChanged(last, now)
+      last = now
+      return changed
+    }
+  }
+}
+
 // The caps-lock label from the `brightness` of every caps-lock LED under
 // /sys/class/leds, one per line: on when any is lit. A machine without such
 // an LED gets the plain name, since the state is unknown.

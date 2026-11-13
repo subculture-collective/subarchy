@@ -273,8 +273,11 @@ func (a *app) watch(store display.Store) int {
 	// is reported, not fatal: exiting would restart the service into the
 	// same failure until systemd's start limit stops it for the session.
 	// apply and syncLid print their own errors. A layout counts as handled
-	// only once both worked, so a failure is tried again at the next
-	// monitor event, also for the same monitors.
+	// once both worked, so a failure is tried again at the next monitor
+	// event, also for the same monitors. The retry is bounded: a failed
+	// apply or the lid sync after it turns outputs on and off, and those
+	// events would otherwise trigger the next attempt without end.
+	const maxTries = 2
 	ok := true
 	if p, found := store.Match(ms); found {
 		ok = a.apply(p, ms, false) == 0
@@ -286,7 +289,7 @@ func (a *app) watch(store display.Store) int {
 	if debounce <= 0 {
 		debounce = display.DefaultDebounceMs * time.Millisecond
 	}
-	last, handled := display.Identity(ms), ok
+	last, handled, tries := display.Identity(ms), ok, 1
 	sc := bufio.NewScanner(conn)
 	// windowtitlev2>> lines carry whole window titles.
 	sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
@@ -304,10 +307,15 @@ func (a *app) watch(store display.Store) int {
 			continue
 		}
 		id := display.Identity(ms)
-		if handled && len(last) == len(id) && strings.Join(last, "\x00") == strings.Join(id, "\x00") {
+		same := len(last) == len(id) && strings.Join(last, "\x00") == strings.Join(id, "\x00")
+		if same && handled {
 			continue
 		}
-		last, handled = id, false
+		if !same {
+			last, tries = id, 0
+		}
+		tries++
+		handled = tries >= maxTries
 		store, err = display.Load(a.store) // the user may have saved a profile meanwhile
 		if err != nil {
 			fmt.Fprintf(a.stderr, "subcult display: %v\n", err)
@@ -319,9 +327,10 @@ func (a *app) watch(store display.Store) int {
 		} else {
 			ok = a.apply(p, ms, false) == 0
 		}
-		if a.syncLid() == 0 && ok {
-			handled = true
+		if a.syncLid() != 0 {
+			ok = false
 		}
+		handled = handled || ok
 	}
 	// A read error exits non-zero so Restart=on-failure brings it back.
 	if err := sc.Err(); err != nil {

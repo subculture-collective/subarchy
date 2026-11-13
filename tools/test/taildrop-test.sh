@@ -41,7 +41,9 @@ case "$1 $2" in
   printf 'waiting for file...'
   printf 'new' >"$dest/notes.txt"
   echo "wrote notes.txt as $dest/notes.txt (3 bytes)"
-  # Failing halfway: one file written, the next one cut off.
+  # Failing halfway: one file written, the next one cut off. On a full
+  # disk the receiver's log of the get can lose the record too.
+  [[ -e $TD_TEST/log-lost ]] && rm -f -- "$dest.log"
   [[ -e $TD_TEST/get-fails ]] && { printf 'im' >"$dest/photo.png"; echo "failed to write $dest/photo.png: no space left on device" >&2; exit 1; }
   printf 'img' >"$dest/photo.png"
   echo "wrote photo.png as $dest/photo.png (3 bytes)"
@@ -120,12 +122,20 @@ grep -q 'cut-off' "$work/notes" && fail "a file from an unfinished get was annou
 touch "$work/get-fails"
 : >"$work/notes"
 rm -f "$dl/photo.png"
-if receive 2>/dev/null; then fail "receive --once succeeded after a failed get"; fi
-rm "$work/get-fails"
+if receive 2>"$work/err"; then fail "receive --once succeeded after a failed get"; fi
+[[ $(<"$work/err") == "taildrop-receive: failed to write $spool/get."??????"/photo.png: no space left on device" ]] ||
+  fail "failed get error: $(<"$work/err")"
 [[ $(<"$dl/notes-2.txt") == new ]] || fail "a failed get lost its finished file: $(ls -A "$dl")"
 [[ ! -e $dl/photo.png ]] || fail "a cut-off file was delivered: $(ls -A "$dl")"
 [[ $(cat "$work/notes") == 'Received notes-2.txt | Saved to ~/Downloads' ]] || fail "failed get announcements: $(cat "$work/notes")"
 [[ -z $(ls -A "$spool") ]] || fail "a failed get left files: $(ls -A "$spool")"
+# The same with the log on disk lost (a full disk): the finished file is
+# still delivered, from the record kept in memory.
+touch "$work/log-lost"
+if receive 2>/dev/null; then fail "receive --once succeeded after a failed get"; fi
+rm "$work/get-fails" "$work/log-lost"
+[[ $(<"$dl/notes-3.txt") == new ]] || fail "a failed get without its log lost its finished file: $(ls -A "$dl")"
+[[ ! -e $dl/photo.png && -z $(ls -A "$spool") ]] || fail "a failed get without its log: $(ls -A "$dl") / $(ls -A "$spool")"
 
 # Downloads removed: the delivery makes it again.
 rm -rf "$dl"

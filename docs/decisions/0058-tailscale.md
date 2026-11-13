@@ -130,8 +130,11 @@ pause during captive portal sign-in.
   runs `file get --verbose`, which logs each file once it is written and
   before it leaves the inbox; the files the log names are delivered, even
   when the get failed or an earlier run was stopped, and only a file it
-  does not name (cut off halfway, still in the inbox) is dropped. A file
-  whose removal from the inbox failed can arrive twice. A folder or a
+  does not name (cut off halfway, still in the inbox) is dropped. The
+  receiver reads that output from memory, so a full disk that keeps the
+  log from being written does not lose a file; the log on disk is only
+  for a get that a stop cut off. A file whose removal from the inbox
+  failed, or was cut off by a stop, can arrive twice. A folder or a
   link to a folder in `~/Downloads` now also counts as a taken name
   (`ln -T`), and a send to an IPv6 address passes it to `tailscale file
   cp` in brackets, which tailscale requires. Found in review of PR #157.

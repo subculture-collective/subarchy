@@ -705,7 +705,7 @@ def boot(disk: Path, vars_file: Path) -> bool:
             # install/packages/desktop.txt. /usr/bin/voxtype is made by the
             # package's install script, so it also shows that script ran.
             "desktop_apps": serial.run(
-                "for c in voxtype localsend proton-mail pass-cli protonvpn-app protonvpn"
+                "for c in voxtype localsend proton-mail proton-pass pass-cli protonvpn-app protonvpn"
                 " proton-authenticator proton-drive; do command -v $c >/dev/null || echo missing:$c; done; echo APPS_DONE"
             ),
             "power_key": serial.run("busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey;"

@@ -162,8 +162,12 @@ def console_text(serial: Serial, vt: int) -> str:
 
 
 def console_rows(serial: Serial, vt: int) -> list[str]:
-    """The virtual console's rows as they are, leading spaces kept."""
-    return serial.run(f"fold -w \"$(stty -F /dev/tty{vt} size | cut -d' ' -f2)\" /dev/vcs{vt}; echo").splitlines()
+    """The virtual console's rows as they are, leading spaces kept.
+
+    /dev/vcs holds one byte a cell, and the logo's glyph bytes can pair up
+    as UTF-8, so fold has to count bytes.
+    """
+    return serial.run(f"LC_ALL=C fold -w \"$(stty -F /dev/tty{vt} size | cut -d' ' -f2)\" /dev/vcs{vt}; echo").splitlines()
 
 
 def column_of(rows: list[str], text: str) -> int:

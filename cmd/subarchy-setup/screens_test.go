@@ -81,8 +81,11 @@ func TestScreensInstall(t *testing.T) {
 		for _, q := range []string{"Time zone", "Computer name> ", "User name> ", "Password> "} {
 			if strings.Contains(strings.Join(args, "\x00"), "\x00"+q) {
 				text := out.String()
-				i := strings.LastIndex(text, "Let's set up your ")
-				headings[q] = text[i : i+strings.Index(text[i:], ".")+1]
+				if i := strings.LastIndex(text, "Let's set up your "); i >= 0 {
+					headings[q] = text[i : i+strings.Index(text[i:], ".")+1]
+				} else {
+					headings[q] = ""
+				}
 			}
 		}
 		out, code := real(args...)
@@ -157,6 +160,17 @@ func TestScreensInstall(t *testing.T) {
 	}
 }
 
+// gum drops a backslash in front of any character in --selected, so a
+// backslash in a row is doubled as well as a comma escaped.
+func TestChooseSelectedEscapes(t *testing.T) {
+	s, g, _ := testScreens(t, "")
+	row := `/dev/vda  1 TB  Model\x20One  [vfat, ext4]`
+	s.choose("Install disk", []string{row}, row)
+	if want := `--selected /dev/vda  1 TB  Model\\x20One  [vfat\, ext4]`; !strings.Contains(callText(g), want) {
+		t.Errorf("gum call lacks %q: %s", want, callText(g))
+	}
+}
+
 func callText(g *fakeGum) string {
 	var b strings.Builder
 	for _, c := range g.calls {
@@ -222,7 +236,8 @@ func TestProgressOf(t *testing.T) {
 		{">> installing packages\nresolving...\n", 50, "Installing packages"},
 		// Before the first package unpacks, what pacman is doing, not "0 of 4".
 		{">> installing packages\nPackages (4) a-1  b-2\n", 50, "Getting the packages ready"},
-		{">> installing packages\nPackages (4) a-1  b-2\n:: Retrieving packages...\na-1 downloading...\nb-2 downloading...\n", 60, "Downloading packages"},
+		// pacman's download lines start with a space.
+		{">> installing packages\nPackages (4) a-1  b-2\n:: Retrieving packages...\n a-1 downloading...\n b-2 downloading...\n", 60, "Downloading packages"},
 		{">> installing packages\nPackages (4) a-1  b-2\n:: Retrieving packages...\nchecking keyring...\nchecking package integrity...\n", 75, "Checking the packages"},
 		{">> installing packages\nPackages (4) a-1  b-2\n\ninstalling a...\ninstalling b...\n", 275, "Installing packages (2 of 4)"},
 		// pacstrap's second try counts afresh.
@@ -233,13 +248,33 @@ func TestProgressOf(t *testing.T) {
 			"( 1/10) Creating system user accounts...\n(10/10) Signing EFI binaries...\n", 860, "Setting up packages (10 of 10)"},
 		{">> installing packages\nPackages (2) a b\ninstalling a...\ninstalling b...\n:: Running post-transaction hooks...\n" +
 			"(1/2) Install DKMS modules\n==> dkms install nvidia -k lts\n==> dkms install nvidia -k zen\n", 511, "Setting up packages (1 of 2)"},
+		// With dkms in the package list, its hook takes most of the bar's
+		// share for the hooks, and the quick hooks after it the rest.
+		{">> installing packages\nPackages (3) dkms-3.2-1  nvidia-open-dkms-580-1  b\ninstalling a...\n:: Running post-transaction hooks...\n" +
+			"(1/3) Install DKMS modules\n==> dkms install nvidia -k lts\n==> dkms install nvidia -k zen\n", 561, "Setting up packages (1 of 3)"},
+		{">> installing packages\nPackages (3) dkms-3.2-1  nvidia-open-dkms-580-1  b\ninstalling a...\n:: Running post-transaction hooks...\n" +
+			"(1/3) Install DKMS modules\n==> dkms install nvidia -k lts\n(2/3) Updating fontconfig cache...\n", 861, "Setting up packages (2 of 3)"},
 		{">> installing packages\nPackages (2) a b\ninstalling a...\ninstalling b...\n>> configuring the system\n" +
 			strings.Repeat("x\n", 180), 918, "Configuring the system"},
 		{">> configuring the system\n" + strings.Repeat("x\n", 5000) + ">> finishing\n", 990, "Finishing"},
 	} {
-		if at, label := progressOf(c.log); at != c.at || label != c.label {
+		if at, _, label := progressOf(c.log); at != c.at || label != c.label {
 			t.Errorf("progressOf(%.40q) = %d, %q; want %d, %q", c.log, at, label, c.at, c.label)
 		}
+	}
+	// A hook that prints nothing: the bar creeps towards the end of its
+	// share, and never reaches it.
+	log := ">> installing packages\nPackages (2) dkms-3.2-1  b\ninstalling a...\n:: Running post-transaction hooks...\n(1/2) Install DKMS modules\n"
+	at, until, _ := progressOf(log)
+	if until <= at {
+		t.Fatalf("progressOf: at %d, until %d", at, until)
+	}
+	if creep(at, until, 0) != at || creep(at, until, creepTime) != at+(until-at)/2 || creep(at, until, time.Hour) >= until {
+		t.Errorf("creep(%d, %d): %d, %d, %d", at, until, creep(at, until, 0), creep(at, until, creepTime), creep(at, until, time.Hour))
+	}
+	// Unpacking moves per package; it does not creep.
+	if at, until, _ := progressOf(">> installing packages\nPackages (2) a b\ninstalling a...\n"); until != at {
+		t.Errorf("unpacking at %d creeps to %d", at, until)
 	}
 	if bar(500, 10) != "█████░░░░░" {
 		t.Errorf("bar = %q", bar(500, 10))

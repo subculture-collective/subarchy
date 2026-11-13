@@ -18,13 +18,31 @@ import (
 var (
 	packagesTotal = regexp.MustCompile(`(?m)^Packages \((\d+)\)`)
 	installingPkg = regexp.MustCompile(`(?m)^installing [^ ]+\.\.\.`)
-	downloading   = regexp.MustCompile(`(?m)^[^ ]+ downloading\.\.\.`)
+	// pacman prints " linux-zen-7.2.14... downloading..." with a space in front.
+	downloading = regexp.MustCompile(`(?m)^ ?[^ ]+ downloading\.\.\.`)
 	// pacman's hooks run after the last package unpacks, numbered
 	// "( 3/29) Updating linux initcpios...". DKMS modules and the kernel
 	// images are built here, which can take minutes.
 	hooksStart = regexp.MustCompile(`(?m)^:: Running post-transaction hooks`)
-	hookStep   = regexp.MustCompile(`(?m)^\( *(\d+)/(\d+)\) `)
+	hookStep   = regexp.MustCompile(`(?m)^\( *(\d+)/(\d+)\) (.*)$`)
 )
+
+// slowHooks are the pacman hooks that build things: the DKMS modules
+// and the boot images. Each takes slowShare times a quick hook's share
+// of the bar, when the package that ships it is in the package list.
+var slowHooks = []struct {
+	pkg  *regexp.Regexp
+	desc string
+}{
+	{regexp.MustCompile(`\sdkms-\d`), "Install DKMS modules"},
+	{regexp.MustCompile(`\smkinitcpio-\d`), "Updating linux initcpios"},
+}
+
+const slowShare = 20
+
+// creepTime is how long a hook can print nothing before the bar has
+// crept half way to the next hook's share; it never gets there.
+const creepTime = time.Minute
 
 // The ">> installing packages" phase in per mille of the whole bar:
 // pacman's checks up to unpackAt, unpacking up to hooksAt, and its hooks
@@ -75,15 +93,16 @@ var phases = []struct {
 }
 
 // progressOf reads the install log and returns how far the install is,
-// in per mille below 1000, and the current phase's label.
-func progressOf(log string) (int, string) {
-	at, label := 0, "Starting"
+// in per mille below 1000, how far the bar may creep while the log says
+// nothing new (see creep), and the current phase's label.
+func progressOf(log string) (at, until int, label string) {
+	at, label = 0, "Starting"
 	for i, p := range phases {
 		idx := strings.Index(log, p.marker)
 		if idx < 0 {
 			continue
 		}
-		at, label = p.start, p.label
+		at, until, label = p.start, 0, p.label
 		next := 1000
 		if i+1 < len(phases) {
 			next = phases[i+1].start
@@ -91,7 +110,7 @@ func progressOf(log string) (int, string) {
 		rest := log[idx:]
 		switch p.marker {
 		case ">> installing packages":
-			at, label = packagesProgress(rest, at, label, next)
+			at, until, label = packagesProgress(rest, at, label, next)
 		case ">> configuring the system":
 			lines := strings.Count(rest, "\n")
 			if lines > configureLines {
@@ -103,46 +122,42 @@ func progressOf(log string) (int, string) {
 	if at > 999 {
 		at = 999
 	}
-	return at, label
+	return at, max(at, until), label
+}
+
+// creep moves the bar from at towards until while the log has said
+// nothing new for quiet: a DKMS build can print nothing for minutes.
+func creep(at, until int, quiet time.Duration) int {
+	if until <= at || quiet <= 0 {
+		return at
+	}
+	return at + int(int64(until-at)*int64(quiet)/int64(quiet+creepTime))
 }
 
 // packagesProgress follows pacstrap's output: pacman's checks, then the
 // packages it unpacks, then its hooks, which end at next. When pacstrap
 // runs a second time, the last run counts.
-func packagesProgress(log string, at int, label string, next int) (int, string) {
+func packagesProgress(log string, at int, label string, next int) (int, int, string) {
 	found := packagesTotal.FindAllStringSubmatchIndex(log, -1)
 	if found == nil {
-		return at, label
+		return at, 0, label
 	}
 	last := found[len(found)-1]
 	total, _ := strconv.Atoi(log[last[2]:last[3]])
 	if total <= 0 {
-		return at, label
+		return at, 0, label
 	}
 	rest := log[last[0]:]
 	if h := hooksStart.FindAllStringIndex(rest, -1); h != nil {
-		hooks := rest[h[len(h)-1][1]:]
-		steps := hookStep.FindAllStringSubmatchIndex(hooks, -1)
-		if steps == nil {
-			return hooksAt, "Setting up packages"
-		}
-		step := steps[len(steps)-1]
-		n, _ := strconv.Atoi(hooks[step[2]:step[3]])
-		m, _ := strconv.Atoi(hooks[step[4]:step[5]])
-		if n < 1 || n > m {
-			return hooksAt, "Setting up packages"
-		}
-		// Each line a hook prints moves the bar a little closer to the
-		// next hook, so a long build does not look stuck.
-		lines := strings.Count(hooks[step[1]:], "\n")
-		at = hooksAt + (next-hooksAt)*((n-1)*(lines+8)+lines)/(m*(lines+8))
-		return at, fmt.Sprintf("Setting up packages (%d of %d)", n, m)
+		list, _, _ := strings.Cut(rest, "\n")
+		at, until, label := hooksProgress(rest[h[len(h)-1][1]:], list, next)
+		return at, until, label
 	}
 	if done := len(installingPkg.FindAllStringIndex(rest, -1)); done > 0 {
 		if done > total {
 			done = total
 		}
-		return unpackAt + (hooksAt-unpackAt)*done/total, fmt.Sprintf("Installing packages (%d of %d)", done, total)
+		return unpackAt + (hooksAt-unpackAt)*done/total, 0, fmt.Sprintf("Installing packages (%d of %d)", done, total)
 	}
 	// Before the first package unpacks: what pacman is doing.
 	at, label = 50, "Getting the packages ready"
@@ -158,7 +173,51 @@ func packagesProgress(log string, at int, label string, next int) (int, string) 
 		}
 		at += 20 * got / total
 	}
-	return at, label
+	return at, 0, label
+}
+
+// hooksProgress places pacman's hooks between hooksAt and next. A quick
+// hook gets one share, a slow one whose package is in the package list
+// (list) slowShare; each line a hook prints moves the bar a little
+// closer to the next hook's share, and until is where that share ends.
+func hooksProgress(hooks, list string, next int) (at, until int, label string) {
+	steps := hookStep.FindAllStringSubmatchIndex(hooks, -1)
+	if steps == nil {
+		return hooksAt, 0, "Setting up packages"
+	}
+	step := steps[len(steps)-1]
+	n, _ := strconv.Atoi(hooks[step[2]:step[3]])
+	m, _ := strconv.Atoi(hooks[step[4]:step[5]])
+	if n < 1 || n > m {
+		return hooksAt, 0, "Setting up packages"
+	}
+	share := func(desc string) int {
+		for _, h := range slowHooks {
+			if strings.HasPrefix(desc, h.desc) && h.pkg.MatchString(list) {
+				return slowShare
+			}
+		}
+		return 1
+	}
+	shares := m
+	for _, h := range slowHooks {
+		if h.pkg.MatchString(list) {
+			shares += slowShare - 1
+		}
+	}
+	done := n - 1
+	for _, s := range steps[:len(steps)-1] {
+		done += share(hooks[s[6]:s[7]]) - 1
+	}
+	this := share(hooks[step[6]:step[7]])
+	if done+this > shares {
+		shares = done + this // a slow hook from a package not in the list
+	}
+	lines := strings.Count(hooks[step[1]:], "\n")
+	span := next - hooksAt
+	at = hooksAt + span*(done*(lines+8)+this*lines)/(shares*(lines+8))
+	until = hooksAt + span*(done+this)/shares
+	return at, until, fmt.Sprintf("Setting up packages (%d of %d)", n, m)
 }
 
 // tips rotate under the bar while the install runs. Each fits the
@@ -353,6 +412,7 @@ func (s *screens) progress(logPath string) (stop func()) {
 	go func() {
 		defer close(finished)
 		best, showLog := 0, false
+		seen, since := -1, time.Now() // where the log last put the bar, and when
 		tick := time.NewTicker(200 * time.Millisecond)
 		defer tick.Stop()
 		// One more frame is drawn after stop is called, so the view always
@@ -368,7 +428,11 @@ func (s *screens) progress(logPath string) (stop func()) {
 			if k := next(); k == 'l' || k == 'L' {
 				showLog = !showLog
 			}
-			at, label := progressOf(log)
+			at, until, label := progressOf(log)
+			if at != seen {
+				seen, since = at, time.Now()
+			}
+			at = creep(at, until, time.Since(since))
 			if at < best {
 				at = best // the bar never goes back
 			}

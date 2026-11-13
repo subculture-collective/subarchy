@@ -162,8 +162,9 @@ func (s *screens) choose(header string, options []string, selected string) (stri
 	args := []string{"choose", "--height", "12", "--header", header, "--padding", s.padding(),
 		"--cursor.foreground", colAcid, "--header.foreground", colViolet, "--selected.foreground", colAcid}
 	if selected != "" {
-		// gum splits --selected on commas; a comma in the row is escaped.
-		args = append(args, "--selected", strings.ReplaceAll(selected, ",", `\,`))
+		// gum splits --selected on commas and drops a backslash in front of
+		// any character, so a comma or backslash in the row is escaped.
+		args = append(args, "--selected", strings.NewReplacer(`\`, `\\`, ",", `\,`).Replace(selected))
 	}
 	out, code := s.gum(append(args, options...)...)
 	if code != 0 || out == "" {

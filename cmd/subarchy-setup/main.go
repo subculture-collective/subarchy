@@ -478,9 +478,16 @@ func action(what string) error {
 	switch what {
 	case "reboot", "poweroff":
 		// Only emergencies on the console from here: the watchdog and
-		// console warnings of a normal shutdown stay in the journal.
+		// console warnings of a normal shutdown stay in the journal, and
+		// SIGRTMIN+21 turns off systemd's own "Stopped ..." lines.
+		level, _ := os.ReadFile("/proc/sys/kernel/printk")
 		exec.Command("dmesg", "-n", "1").Run()
-		return exec.Command("systemctl", what).Run()
+		exec.Command("kill", "-s", "RTMIN+21", "1").Run()
+		err := exec.Command("systemctl", what).Run()
+		if f := strings.Fields(string(level)); err != nil && len(f) > 0 {
+			exec.Command("dmesg", "-n", f[0]).Run() // still in the live system
+		}
+		return err
 	case "log":
 		return interactive("less", "+G", installLog)
 	}

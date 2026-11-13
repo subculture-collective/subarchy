@@ -4,8 +4,9 @@
 1. Boots the ISO with an empty virtio disk, shares this checkout (read-only)
    and a persistent package cache over 9p, and runs install/subarchy-install
    from the checkout, so installer changes need no ISO rebuild.
-2. Boots the disk alone, types the LUKS passphrase on the serial console,
-   logs in as the new user and checks the result.
+2. Boots the disk alone, types three wrong LUKS passphrases and then the
+   right one on the serial console, logs in as the new user and checks the
+   result.
 
 The disk, its OVMF variables and the test credentials stay in build/vm/.
 They are throwaway test values for a VM, not secrets.
@@ -121,6 +122,7 @@ def quietest_minute(sample, attempts: int = 3) -> tuple[int, int]:
 USER = "tester"
 PASSWORD = "subarchy-test"
 PASSPHRASE = "subarchy-disk-test"
+WRONG_PASSPHRASE = "not-the-disk-passphrase"
 
 
 def write_config() -> None:
@@ -437,8 +439,22 @@ def boot(disk: Path, vars_file: Path) -> bool:
         print(f"install-test: LUKS prompt after {time.monotonic() - started:.0f}s")
         time.sleep(2)
         screendump(qmp, VM / "luks.png")  # Plymouth draws the prompt (ADR 0013)
+        # Three wrong passphrases, then the right one. With tries=0 the
+        # prompt keeps asking; systemd-cryptsetup's default of three would
+        # end in the initrd's emergency shell, which the locked root
+        # account cannot open. Each wait covers the key check (about 2 s).
+        for _ in range(3):
+            serial.send(WRONG_PASSPHRASE + "\n")
+            time.sleep(10)
+        screendump(qmp, VM / "luks-retry.png")  # the prompt after a failed passphrase
         serial.send(PASSPHRASE + "\n")
-        serial.expect(re.compile(rb"login: "), 180)
+        unlocked = serial.expect(re.compile(rb"login: |emergency mode"), 180)
+        unlock_retry = unlocked.endswith(b"login: ") and b"account is locked" not in unlocked
+        if not unlock_retry:
+            # Enter left emergency mode and the plain console asks again.
+            serial.expect(re.compile(rb"assphrase for"), 120)
+            serial.send(PASSPHRASE + "\n")
+            serial.expect(re.compile(rb"login: "), 180)
         print(f"install-test: login prompt after {time.monotonic() - started:.0f}s")
         serial.send(USER + "\n")
         serial.expect(re.compile(rb"Password: "), 30)
@@ -503,6 +519,16 @@ def boot(disk: Path, vars_file: Path) -> bool:
             # service otherwise exits before importing its Python bindings.
             "power_cli": serial.run("powerprofilesctl --help >/dev/null; echo POWER_CLI_EXIT=$?"),
             "cmdline": serial.run("cat /proc/cmdline"),
+            # The three wrong passphrases typed at the prompt, and no
+            # emergency shell in this boot.
+            "unlock": serial.run(f"{sudo} journalctl -b -o cat | grep -c 'Failed to activate with specified passphrase';"
+                                 f" {sudo} journalctl -b -o cat | grep -c 'Emergency Shell'"),
+            # Boot images built by the install: one UKI per kernel, none of
+            # mkinitcpio's preset images (nothing boots them).
+            "boot_images": serial.run(
+                f"for k in linux-zen linux-lts; do {sudo} grep -c \"Building UKI for $k (\" /var/log/subarchy-install.log; done;"
+                f" {sudo} grep -c 'Building image from preset' /var/log/subarchy-install.log; {sudo} ls /boot | grep -c '^initramfs-'"
+            ),
             # GPU modes (ADR 0006): a VM has no hybrid graphics, so the uwsm
             # hook must stay silent and the session start in its default.
             "gpu": serial.run("test -r /usr/share/uwsm/env-hyprland.d/50-subarchy-gpu && echo HOOK;"
@@ -799,6 +825,11 @@ finally:
         and ("starship=/usr/share/subcult/default/shell/starship.toml" in r["shell_setup"] or "own-prompt" in r["shell_setup"])
         and "atuin=1 zoxide=1 prompt=1" in r["shell_setup"],
         "both UKIs present": "subarchy_linux-zen.efi" in r["uki"] and "subarchy_linux-lts.efi" in r["uki"],
+        "each kernel built once, as its UKI; no initramfs images on the ESP": r["boot_images"].split() == ["1", "1", "0", "0"],
+        "disk unlock asks again without limit (rd.luks.options has tries=0)":
+            re.search(r"\brd\.luks\.options=\S*\btries=0\b", r["cmdline"]) is not None,
+        "three wrong passphrases ask again, then the right one boots, with no emergency mode": unlock_retry
+        and r["unlock"].split() == ["3", "0"],
         "snapshot boot entry": "rootflags=subvol=/@/.snapshots/" in r["snapshot"],
         "no self-referencing EFI entry": "/EFI/BOOT/BOOTX64.EFI" not in r["snapshot"],
         "subcult update authenticates before privileged work": "UNAUTH_STEP_EXIT=1" in r["update"]

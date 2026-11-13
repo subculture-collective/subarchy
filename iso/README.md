@@ -44,9 +44,11 @@ The image is 1.6 GB.
 
 CI builds and boots the image in `.gitea/workflows/iso.yml` on the
 `subarchy-kvm` runner, whose job containers are privileged and have
-`/dev/kvm` ([KVM CI runner](../docs/ci-runner.md)): on `main`, on demand
-(`workflow_dispatch`), and on pull requests that change the image or the
-pipeline. `tools/ci/build-iso.sh` builds the core package from the checkout,
+`/dev/kvm` ([KVM CI runner](../docs/ci-runner.md)): on pushes to `main` and
+on demand (`workflow_dispatch`). Pull requests are verified on GitHub
+(`.github/workflows/mirror-ci.yml`), which has no ISO or VM job, so a change
+to the image or the test harness first runs here after it merges.
+`tools/ci/build-iso.sh` builds the core package from the checkout,
 takes the pinned rebuilds from the signed stable registry and the install
 set from Subarchy's Arch snapshot, then runs `make iso` and the boot test.
 `tools/ci/install-test.sh` then installs from that image into a VM disk and

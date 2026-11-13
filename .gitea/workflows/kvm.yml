@@ -3,16 +3,13 @@ name: kvm
 on:
   push:
     branches: [main]
-  pull_request:
 
 permissions:
   contents: read
 
-# A newer push to the same pull request supersedes the smoke run; main runs
-# are not cancelled.
+# Main runs queue rather than cancel each other.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   smoke:

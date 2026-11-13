@@ -131,7 +131,7 @@ type vevent struct {
 // parseICS reads every VEVENT of an iCalendar text. An event without a UID
 // or a start, or with a DTSTART or DTEND that does not parse, is dropped so
 // one broken event does not cost the rest of the feed.
-func parseICS(text string, loc *time.Location) ([]vevent, error) {
+func parseICS(text string, loc *time.Location) []vevent {
 	var events []vevent
 	var cur *vevent
 	var duration time.Duration
@@ -207,7 +207,7 @@ func parseICS(text string, loc *time.Location) ([]vevent, error) {
 			duration, hasDuration = parseDuration(p.value)
 		}
 	}
-	return events, nil
+	return events
 }
 
 // parseDuration reads an iCalendar duration such as PT1H30M or P1D.
@@ -256,9 +256,10 @@ func parseDuration(s string) (time.Duration, bool) {
 }
 
 // Occurrences expands the events into the window: single events as they
-// are, recurring ones by their RRULE (daily, weekly with BYDAY, monthly by
-// day of month or by BYDAY, BYMONTHDAY, BYMONTH and BYSETPOS, yearly;
-// INTERVAL, COUNT, UNTIL, EXDATE). A series steps through the calendar of
+// are, recurring ones by their RRULE (daily and weekly with BYDAY, weeks
+// starting on WKST, Monday by default; monthly by day of month or by
+// BYDAY, BYMONTHDAY, BYMONTH and BYSETPOS; yearly; INTERVAL, COUNT, UNTIL,
+// EXDATE). A series steps through the calendar of
 // the zone its DTSTART was written in. Overridden occurrences
 // (RECURRENCE-ID) replace the generated one.
 func Occurrences(calendar string, events []vevent, w Window) []Event {

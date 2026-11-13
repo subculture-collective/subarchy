@@ -493,12 +493,12 @@ func TestPatchedFamiliesNamesTheNewFiles(t *testing.T) {
 	}
 }
 
-// install and set can run pacman, so the launcher asks for the password
-// (#4 Phase B M8).
-func TestInstallAndSetRequireSudo(t *testing.T) {
+// install, set and patch can run pacman, so the launcher asks for the
+// password (#4 Phase B M8).
+func TestPacmanRoutesRequireSudo(t *testing.T) {
 	for _, r := range routes {
 		verb := r.Words[1]
-		if want := verb == "install" || verb == "set"; r.RequiresSudo != want {
+		if want := verb == "install" || verb == "set" || verb == "patch"; r.RequiresSudo != want {
 			t.Errorf("font %s: RequiresSudo = %v, want %v", verb, r.RequiresSudo, want)
 		}
 	}

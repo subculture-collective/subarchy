@@ -7,10 +7,7 @@ import (
 
 func occurrencesIn(t *testing.T, ics string, from, to time.Time) []Event {
 	t.Helper()
-	events, err := parseICS(ics, chicago)
-	if err != nil {
-		t.Fatal(err)
-	}
+	events := parseICS(ics, chicago)
 	return Occurrences("c", events, Window{From: from, To: to})
 }
 
@@ -179,10 +176,7 @@ func TestBadEventDoesNotDropTheFeed(t *testing.T) {
 	ics := "BEGIN:VEVENT\nUID:good\nSUMMARY:Good\nDTSTART:20261102T090000Z\nDTEND:20261102T100000Z\nEND:VEVENT\n" +
 		"BEGIN:VEVENT\nUID:bad-start\nSUMMARY:Bad\nDTSTART:20261102T0900\nEND:VEVENT\n" +
 		"BEGIN:VEVENT\nUID:bad-end\nSUMMARY:Bad end\nDTSTART:20261103T090000Z\nDTEND:tomorrow\nEND:VEVENT\n"
-	events, err := parseICS(ics, chicago)
-	if err != nil {
-		t.Fatal(err)
-	}
+	events := parseICS(ics, chicago)
 	if len(events) != 1 || events[0].uid != "good" {
 		t.Errorf("want only the good event, got %+v", events)
 	}

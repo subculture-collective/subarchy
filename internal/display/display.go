@@ -1,11 +1,12 @@
 // Package display saves and applies monitor layouts (rice port: dock and
 // monitor profiles). A profile records the connected monitors by their
 // description (make, model, serial) and which workspaces live on each. The
-// connector is kept only to tell identical monitors apart. `subcult display watch` reacts to Hyprland's
-// monitor events (no polling) and applies the profile for the connected
-// set after a short debounce; `subcult display profile apply` does it by
-// hand. Changes go through `hyprctl eval` (monitor rules) and
-// `hyprctl dispatch` (workspace moves), the same Lua Hyprland's config uses.
+// connector is kept only to tell identical monitors apart.
+// `subcult display watch` reacts to Hyprland's monitor events (no polling)
+// and applies the profile for the connected set after a short debounce;
+// `subcult display profile apply` does it by hand. Changes go through
+// `hyprctl eval` (monitor rules) and `hyprctl dispatch` (workspace moves),
+// the same Lua Hyprland's config uses.
 package display
 
 import (

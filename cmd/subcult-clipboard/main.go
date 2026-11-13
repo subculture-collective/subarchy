@@ -170,9 +170,12 @@ func (a *app) store() int {
 	s, err := clipboard.Load(a.dir)
 	if err != nil {
 		// An unreadable history must not stop recording: the next save
-		// replaces it.
+		// replaces it, so the images it listed are dropped with it.
 		fmt.Fprintf(a.stderr, "subcult clipboard: %v; starting a new history\n", err)
 		s = clipboard.Store{Schema: 1}
+		if err := a.removeStoreFiles(false, e.File); err != nil {
+			return a.fail(err)
+		}
 	}
 	dropped := s.Add(e)
 	if err := clipboard.Save(a.dir, s); err != nil {
@@ -283,19 +286,35 @@ func (a *app) clear() int {
 // clearUnreadable drops a history that does not load: history.json and
 // the image files store writes beside it.
 func (a *app) clearUnreadable(loadErr error) int {
-	files, err := os.ReadDir(a.dir)
-	if err != nil {
+	if err := a.removeStoreFiles(true, ""); err != nil {
 		return a.fail(err)
-	}
-	for _, f := range files {
-		if f.Type().IsRegular() && (f.Name() == "history.json" || strings.HasSuffix(f.Name(), ".png")) {
-			if err := os.Remove(filepath.Join(a.dir, f.Name())); err != nil {
-				return a.fail(err)
-			}
-		}
 	}
 	fmt.Fprintf(a.stdout, "dropped an unreadable history (%v)\n", loadErr)
 	return 0
+}
+
+// removeStoreFiles removes the image files store writes, except keep, and
+// history.json when withHistory is set. A missing folder is not an error.
+func (a *app) removeStoreFiles(withHistory bool, keep string) error {
+	files, err := os.ReadDir(a.dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, f := range files {
+		name := f.Name()
+		if !f.Type().IsRegular() || name == keep {
+			continue
+		}
+		if (withHistory && name == "history.json") || strings.HasSuffix(name, ".png") {
+			if err := os.Remove(filepath.Join(a.dir, name)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func realOutput(argv []string, stdin []byte) ([]byte, error) {

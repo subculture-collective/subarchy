@@ -54,7 +54,7 @@ var routes = []dispatch.Described{
 		Summary: "Check whether a font works in the terminal and shell", Args: "<family>",
 		Examples: []string{`subcult font check "Dank Mono"`}}},
 	{Words: []string{"font", "patch"}, Metadata: dispatch.Metadata{
-		Summary: "Make a copy of a font with Nerd Font icons", Args: "<family>",
+		Summary: "Make a copy of a font with Nerd Font icons", Args: "<family>", RequiresSudo: true,
 		Examples: []string{`subcult font patch "Dank Mono"`}}},
 }
 

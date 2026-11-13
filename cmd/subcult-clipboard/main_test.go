@@ -180,11 +180,22 @@ func TestCorruptHistoryRecovers(t *testing.T) {
 	if err := os.WriteFile(history, []byte(`{"schema": 1, "entries": [`), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	stale := filepath.Join(a.dir, "old.png")
+	if err := os.WriteFile(stale, []byte("PNG"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if code := a.run([]string{"store"}); code != 0 {
 		t.Fatalf("store on a corrupt history: exit %d", code)
 	}
-	if es := entries(t, a); len(es) != 1 || es[0].Kind != "image" {
+	es := entries(t, a)
+	if len(es) != 1 || es[0].Kind != "image" {
 		t.Fatalf("entries %+v", es)
+	}
+	if _, err := os.Stat(filepath.Join(a.dir, es[0].File)); err != nil {
+		t.Errorf("the new image was removed: %v", err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("an image the lost history listed was kept: %v", err)
 	}
 	if err := os.WriteFile(history, []byte("not json"), 0o600); err != nil {
 		t.Fatal(err)

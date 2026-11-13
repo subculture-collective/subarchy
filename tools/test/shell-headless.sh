@@ -923,7 +923,8 @@ for _ in $(seq 20); do [[ $(ts state) == *'"state":"Running"'* ]] && break; slee
   tsfail "tailscale signed in"
 [[ $(ts state) == *'"loginUrl":""'* ]] || tsfail "the sign-in link stayed after the sign-in"
 # Nothing asked tailscaled for a change directly: that needs operator rights.
-if grep -qvxE 'status --json|up' "$home1/tailscale-log"; then tsfail "tailscale called directly"; fi
+# The helper reads its settings (debug prefs) before up.
+if grep -qvxE 'status --json|debug prefs|up' "$home1/tailscale-log"; then tsfail "tailscale called directly"; fi
 # Weather: in the default layout; nothing is fetched until a location is
 # set (no Open-Meteo call in the curl log); the panel's search runs
 # linecast; a location set in the config fetches the conditions (stub curl)

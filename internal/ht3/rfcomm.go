@@ -25,11 +25,7 @@ func Dial(address string, timeout time.Duration) (*os.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open an RFCOMM socket: %w", err)
 	}
-	// The kernel's bdaddr_t is little-endian: the last octet first.
-	sa := &unix.SockaddrRFCOMM{Channel: Channel}
-	for i := range mac {
-		sa.Addr[i] = mac[len(mac)-1-i]
-	}
+	sa := &unix.SockaddrRFCOMM{Channel: Channel, Addr: bdaddr(mac)}
 	err = unix.Connect(fd, sa)
 	if errors.Is(err, unix.EINPROGRESS) {
 		err = waitConnected(fd, timeout)
@@ -66,6 +62,10 @@ func waitConnected(fd int, timeout time.Duration) error {
 		if soErr != 0 {
 			return unix.Errno(soErr)
 		}
+		// Closed or failed with no error recorded: not connected.
+		if fds[0].Revents&(unix.POLLHUP|unix.POLLERR|unix.POLLNVAL) != 0 {
+			return unix.ECONNRESET
+		}
 		return nil
 	}
 }
@@ -78,7 +78,11 @@ func Explain(err error) string {
 	case errors.Is(err, io.EOF):
 		return "The headphones closed the control channel."
 	case errors.Is(err, unix.EBUSY), errors.Is(err, unix.ECONNREFUSED), errors.Is(err, unix.EADDRINUSE):
-		return "Another app holds the headphones' control channel. Close the TOZO app, then open the panel again."
+		// Which of these the TOZO app's hold produces is not yet seen on
+		// hardware; a refusal can also mean the channel is not offered.
+		return "The headphones refused the control channel. If the TOZO app is open on a phone, close it, then open the panel again."
+	case errors.Is(err, unix.ECONNRESET):
+		return "The headphones dropped the control channel."
 	case errors.Is(err, unix.ETIMEDOUT), errors.Is(err, unix.EHOSTDOWN), errors.Is(err, unix.EHOSTUNREACH):
 		return "The headphones are out of reach."
 	case errors.Is(err, unix.EAFNOSUPPORT), errors.Is(err, unix.EPROTONOSUPPORT):

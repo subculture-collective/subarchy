@@ -12,11 +12,13 @@ const modes = {
   unknown: "Unknown"
 }
 
-// An HT3 by its BlueZ alias or remote name ("TOZO HT3", "TOZO-HT3").
+// An HT3 by its BlueZ alias or remote name: one that contains both "HT3"
+// and "TOZO" in any case ("TOZO HT3", "TOZO-HT3", "TOZOHT3"), the rule of
+// the owner's omarchy-plugin-ht3.
 function isHt3(d) {
   if (!d || typeof d !== "object")
     return false
-  return [d.name, d.deviceName].some(n => typeof n === "string" && /(^|[^a-z0-9])ht3([^a-z0-9]|$)/i.test(n))
+  return [d.name, d.deviceName].some(n => typeof n === "string" && /ht3/i.test(n) && /tozo/i.test(n))
 }
 
 function label(d) {

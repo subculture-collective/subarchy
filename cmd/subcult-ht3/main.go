@@ -31,6 +31,9 @@ const (
 	dialTimeout = 10 * time.Second
 	replyWait   = 2 * time.Second
 	tries       = 3
+	// refreshEvery is how often watch asks again while the panel is open,
+	// as the owner's plugin refreshes its popup.
+	refreshEvery = 30 * time.Second
 )
 
 // dial opens the control channel; tests replace it.
@@ -144,7 +147,7 @@ func watch(address string, stdout io.Writer) int {
 	if err := s.Query(replyWait, tries, changed); err != nil {
 		return fail(err)
 	}
-	return fail(s.Follow(changed))
+	return fail(s.Follow(refreshEvery, changed))
 }
 
 func main() {

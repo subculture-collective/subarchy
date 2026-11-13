@@ -10,12 +10,16 @@ TestCase {
   readonly property var asleep: ({ name: "TOZO HT3", address: "AA:BB:CC:DD:EE:03", connected: false })
   readonly property var other: ({ name: "TOZO T10", address: "AA:BB:CC:DD:EE:04", connected: true })
   readonly property var lookalike: ({ name: "HT30 speaker", address: "AA:BB:CC:DD:EE:05", connected: true })
+  readonly property var joined: ({ name: "tozoht3", address: "AA:BB:CC:DD:EE:06", connected: true })
 
   function test_which_devices() {
     verify(Model.isHt3(ht3))
     verify(Model.isHt3(renamed), "the remote name counts when the alias was changed")
     verify(!Model.isHt3(other))
-    verify(!Model.isHt3(lookalike))
+    verify(!Model.isHt3(lookalike), "HT3 without TOZO is someone else's")
+    verify(Model.isHt3(joined), "the owner's plugin matches HT3 and TOZO anywhere in the name")
+    verify(Model.isHt3({ name: "TOZO HT3s" }))
+    verify(!Model.isHt3({ name: "TOZO", deviceName: "HT3" }), "both words in one name")
     verify(!Model.isHt3(null))
     compare(Model.connected([other, asleep, lookalike]), null, "hidden without a connected HT3")
     compare(Model.connected([other, ht3, renamed]).address, renamed.address, "first by name")

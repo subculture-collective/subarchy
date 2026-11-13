@@ -66,9 +66,9 @@ QtObject {
  }
 }
 QML
-# The stub helper: the first run answers with PROTOCOL.md's captured
-# readings (89 %, transparency) and waits to be stopped; the second fails as
-# when the phone app holds the control channel.
+# The stub helper: odd runs answer with PROTOCOL.md's captured readings
+# (89 %, transparency) and wait to be stopped; the second reads the battery,
+# then fails as when the phone app holds the control channel.
 cat >"$work/bin/subcult" <<'PY'
 #!/usr/bin/python3
 import json
@@ -94,13 +94,15 @@ if sys.argv[1:] != ["ht3", "watch", "AA:BB:CC:DD:EE:FF"]:
     emit({"event": "error", "message": "unexpected arguments: " + " ".join(sys.argv[1:])})
     raise SystemExit(2)
 runs = len((work / "started").read_text().split())
-if runs == 1:
+if runs % 2 == 1:
     emit({"event": "connected"})
     emit({"event": "state", "battery": 89})
     emit({"event": "state", "battery": 89, "mode": "transparency"})
     while True:
         signal.pause()
-emit({"event": "error", "message": "Another app holds the headphones' control channel. Close the TOZO app, then open the panel again."})
+emit({"event": "connected"})
+emit({"event": "state", "battery": 89})
+emit({"event": "error", "message": "The headphones refused the control channel. If the TOZO app is open on a phone, close it, then open the panel again."})
 raise SystemExit(1)
 PY
 chmod +x "$work/bin/subcult"
@@ -115,11 +117,12 @@ if [[ -n $artifacts ]]; then
 fi
 if ((status)); then cat "$work/log"; exit "$status"; fi
 grep -q 'PASS: HT3 panel' "$work/log" || { cat "$work/log"; exit 1; }
-[[ $(wc -l <"$work/started") -eq 2 && $(head -n 1 "$work/started") == "$(cat "$work/stopped")" ]] || {
+# Runs 1 and 3 read and wait; both must have been stopped by the panel.
+[[ $(wc -l <"$work/started") -eq 3 && "$(sed -n '1p;3p' "$work/started")" == "$(cat "$work/stopped")" ]] || {
   cat "$work/log"; echo 'ht3-panel-test: the helper did not stop with the panel' >&2; exit 1;
 }
 while read -r pid; do
   if kill -0 "$pid" 2>/dev/null; then echo "ht3-panel-test: helper $pid still running" >&2; exit 1; fi
 done <"$work/started"
 if grep -Eq 'ReferenceError|TypeError|Unable to assign|Cannot assign|Failed to load configuration' "$work/log"; then cat "$work/log"; exit 1; fi
-echo 'ht3-panel-test: PASS (helper starts with the panel, readings shown, stops on close, none without an HT3)'
+echo 'ht3-panel-test: PASS (helper starts with the panel, readings shown, error clears them, restarts on reconnect, stops on close, none without an HT3)'

@@ -37,8 +37,15 @@ Singleton {
     switch (doc.event) {
     case "connected": root.connected = true; root.message = ""; break
     case "state": root.battery = doc.battery; root.mode = doc.mode; break
-    case "error": root.connected = false; root.message = doc.message; break
+    case "error": root.clear(); root.message = doc.message; break
     }
+  }
+
+  // No reading is current once the channel is gone, so none stays on screen.
+  function clear() {
+    root.connected = false
+    root.battery = -1
+    root.mode = ""
   }
 
   Process {
@@ -49,13 +56,11 @@ Singleton {
     onRunningChanged: {
       if (!running)
         return
-      root.connected = false
-      root.battery = -1
-      root.mode = ""
+      root.clear()
       root.message = ""
     }
     onExited: {
-      root.connected = false
+      root.clear()
       if (root.active && root.message === "")
         root.message = "The headphones' helper stopped. Reopen the panel to retry."
     }

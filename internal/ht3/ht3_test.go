@@ -89,11 +89,12 @@ func TestNoiseAndChecksums(t *testing.T) {
 	}{
 		"vendor envelope before and after": {"aa5503010203ff" + capturedBattery + "ff00", []byte{ParamBattery}},
 		"bad checksum":                     {"0002015958" + capturedMode, []byte{ParamMode}},
-		"SET acknowledgement":              {"1004010101" + "1005010101", nil},
-		"unknown parameter":                {"0077010101", nil},
-		"wrong length for battery":         {"000202595900", nil},
-		"zero bytes around a reply":        {"000000" + capturedMode + "0000", []byte{ParamMode}},
-		"false EQ start before a reply":    {"000b14" + capturedBattery, []byte{ParamBattery}},
+		// PROTOCOL.md does not give the SET acknowledgement's bytes; these
+		// are synthetic opcode-16 frames for the SETs it names.
+		"SET acknowledgement (synthetic)": {"1004010101" + "1005010101", nil},
+		"unknown parameter":               {"0077010101", nil},
+		"wrong length for battery":        {"000202595900", nil},
+		"zero bytes around a reply":       {"000000" + capturedMode + "0000", []byte{ParamMode}},
 	}
 	for name, c := range cases {
 		var p Parser
@@ -120,6 +121,26 @@ func TestPartialKeptUntilComplete(t *testing.T) {
 	}
 }
 
+func TestFalseStartFlushed(t *testing.T) {
+	// Vendor bytes that look like an EQ header hold the battery reply back
+	// until the wait runs out; Flush then finds it.
+	var p Parser
+	if got := p.Feed(unhex(t, "000b14"+capturedBattery)); len(got) != 0 {
+		t.Fatalf("read inside a possible EQ reply: %+v", got)
+	}
+	if got := p.Flush(); len(got) != 1 || got[0].Param != ParamBattery || got[0].Payload[0] != 89 {
+		t.Fatalf("flush: %+v", got)
+	}
+	if len(p.buf) != 0 || len(p.Flush()) != 0 {
+		t.Errorf("buffer kept %x", p.buf)
+	}
+	// A partial reply with nothing complete after it stays for its end.
+	p.Feed(unhex(t, "000201"))
+	if got := p.Flush(); len(got) != 0 || len(p.buf) != 3 {
+		t.Errorf("flush dropped a lone partial: %+v %x", got, p.buf)
+	}
+}
+
 func TestEQReplyStepsOverItsBody(t *testing.T) {
 	// Ten gains then ten frequency codes (PROTOCOL.md); the gains here
 	// hold a battery-shaped run that must not be read as a reply.
@@ -128,6 +149,16 @@ func TestEQReplyStepsOverItsBody(t *testing.T) {
 	got := p.Feed(Frame(OpGet, ParamEQ, payload))
 	if len(got) != 1 || got[0].Param != ParamEQ || len(got[0].Payload) != 20 {
 		t.Fatalf("EQ reply: %+v", got)
+	}
+	// The same reply split at every point: still one EQ reply, and the
+	// battery-shaped run in its gains is never taken.
+	frame := Frame(OpGet, ParamEQ, payload)
+	for cut := 1; cut < len(frame); cut++ {
+		var p Parser
+		got := append(p.Feed(frame[:cut]), p.Feed(frame[cut:])...)
+		if len(got) != 1 || got[0].Param != ParamEQ {
+			t.Errorf("cut at %d: %+v", cut, got)
+		}
 	}
 }
 
@@ -152,6 +183,16 @@ func TestStateApply(t *testing.T) {
 		if ModeName(b) != name {
 			t.Errorf("mode %d = %s", b, ModeName(b))
 		}
+	}
+}
+
+func TestBdaddr(t *testing.T) {
+	mac, err := ParseAddress("AA:BB:CC:DD:EE:FF")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := bdaddr(mac); got != [6]byte{0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa} {
+		t.Errorf("bdaddr %x", got)
 	}
 }
 
@@ -213,7 +254,7 @@ func TestSessionQuery(t *testing.T) {
 	// A later reply (as if the mode changed on the headset) reaches Follow.
 	done := make(chan error, 1)
 	go func() {
-		done <- s.Follow(func(st State) error {
+		done <- s.Follow(time.Hour, func(st State) error {
 			if st.Mode == 1 {
 				return io.ErrUnexpectedEOF // stop here
 			}
@@ -227,6 +268,32 @@ func TestSessionQuery(t *testing.T) {
 		t.Errorf("follow: %v", err)
 	}
 	theirs.Close()
+}
+
+func TestFollowAsksAgain(t *testing.T) {
+	ours, theirs := net.Pipe()
+	defer ours.Close()
+	asked := make(chan []byte, 8)
+	go headset(t, theirs, map[byte]string{ParamBattery: capturedBattery, ParamMode: capturedMode}, asked)
+	s := NewSession(ours)
+	if err := s.Query(time.Second, 3, func(State) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	<-asked
+	done := make(chan error, 1)
+	go func() { done <- s.Follow(20*time.Millisecond, func(State) error { return nil }) }()
+	select {
+	case got := <-asked:
+		if hex.EncodeToString(got) != "0002000000300000" {
+			t.Errorf("asked again %x", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Follow did not ask again")
+	}
+	theirs.Close()
+	if err := <-done; err == nil {
+		t.Error("Follow returned no error after the channel closed")
+	}
 }
 
 func TestSessionRetriesOnlyMissing(t *testing.T) {

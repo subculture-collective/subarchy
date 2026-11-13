@@ -97,7 +97,7 @@ func TestWatchDialError(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 	var l line
-	if err := json.Unmarshal(out.Bytes(), &l); err != nil || l.Event != "error" || !strings.Contains(l.Message, "Another app") {
+	if err := json.Unmarshal(out.Bytes(), &l); err != nil || l.Event != "error" || !strings.Contains(l.Message, "TOZO app") {
 		t.Errorf("%s %v", out.String(), err)
 	}
 }

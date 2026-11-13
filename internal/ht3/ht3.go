@@ -99,8 +99,10 @@ type Parser struct {
 }
 
 // Feed adds bytes read from the socket and returns the complete replies
-// they finish. A packet cut across reads is kept until its end arrives,
-// unless a complete reply follows it, which shows it was noise.
+// they finish. A packet cut across reads is kept until its end arrives:
+// once its header names a known reply and that reply's length, bytes
+// inside its body are not read as replies of their own (an EQ reply's
+// gains can look like a battery reply). Flush gives up on it.
 func (p *Parser) Feed(b []byte) []Reply {
 	p.buf = append(p.buf, b...)
 	var out []Reply
@@ -112,18 +114,29 @@ func (p *Parser) Feed(b []byte) []Reply {
 			i++
 			continue
 		case framePartial:
-			if !completeAfter(p.buf[i+1:]) {
-				p.buf = append(p.buf[:0], p.buf[i:]...)
-				return out
-			}
-			i++
-			continue
+			p.buf = append(p.buf[:0], p.buf[i:]...)
+			return out
 		}
 		rest := p.buf[i:]
 		out = append(out, Reply{Param: rest[1], Payload: append([]byte(nil), rest[3:end-1]...)})
 		i += end
 	}
 	p.buf = p.buf[:0]
+	return out
+}
+
+// Flush treats a kept partial packet as noise when complete replies follow
+// it, and returns those. Session calls it when a wait for replies runs out,
+// so a false packet start (vendor bytes that look like a GET header) holds
+// a real reply back by one wait at most. An EQ reply whose second half
+// comes later than that can still be misread; the helper never asks for EQ.
+func (p *Parser) Flush() []Reply {
+	var out []Reply
+	for len(p.buf) > 0 && completeAfter(p.buf[1:]) {
+		rest := append([]byte(nil), p.buf[1:]...)
+		p.buf = p.buf[:0]
+		out = append(out, p.Feed(rest)...)
+	}
 	return out
 }
 
@@ -256,7 +269,7 @@ func (s *Session) Query(wait time.Duration, tries int, changed func(State) error
 		if _, err := s.conn.Write(ask); err != nil {
 			return err
 		}
-		if err := s.read(time.Now().Add(wait), changed); err != nil {
+		if err := s.read(time.Now().Add(wait), true, changed); err != nil {
 			return err
 		}
 	}
@@ -266,38 +279,62 @@ func (s *Session) Query(wait time.Duration, tries int, changed func(State) error
 	return nil
 }
 
-// Follow keeps reading, so a reply the headset sends later still reaches
-// changed, until the connection fails or closes.
-func (s *Session) Follow(changed func(State) error) error {
-	return s.read(time.Time{}, changed)
+// Follow keeps reading, and asks for both values again every interval,
+// so a change on the headset reaches changed while the panel stays open.
+// It returns when the connection fails or closes.
+func (s *Session) Follow(every time.Duration, changed func(State) error) error {
+	for {
+		if err := s.read(time.Now().Add(every), false, changed); err != nil {
+			return err
+		}
+		if _, err := s.conn.Write(append(Get(ParamBattery), Get(ParamMode)...)); err != nil {
+			return err
+		}
+	}
 }
 
-// read reads until the deadline (zero: none) or, with a deadline, until
-// the state is complete.
-func (s *Session) read(deadline time.Time, changed func(State) error) error {
+// read reads until the deadline or, with untilComplete, until the state is
+// complete. At the deadline it flushes a partial packet the parser kept.
+func (s *Session) read(deadline time.Time, untilComplete bool, changed func(State) error) error {
 	if err := s.conn.SetReadDeadline(deadline); err != nil {
 		return err
 	}
-	buf := make([]byte, 256)
-	for {
-		n, err := s.conn.Read(buf)
-		for _, r := range s.parse.Feed(buf[:n]) {
+	apply := func(replies []Reply) error {
+		for _, r := range replies {
 			if s.State.Apply(r) {
 				if err := changed(s.State); err != nil {
 					return err
 				}
 			}
 		}
+		return nil
+	}
+	buf := make([]byte, 256)
+	for {
+		n, err := s.conn.Read(buf)
+		if aerr := apply(s.parse.Feed(buf[:n])); aerr != nil {
+			return aerr
+		}
 		if err != nil {
-			if !deadline.IsZero() && errors.Is(err, os.ErrDeadlineExceeded) {
-				return nil
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				return apply(s.parse.Flush())
 			}
 			return err
 		}
-		if !deadline.IsZero() && s.State.Complete() {
+		if untilComplete && s.State.Complete() {
 			return nil
 		}
 	}
+}
+
+// bdaddr is the address as the kernel's bdaddr_t holds it: little-endian,
+// the last octet first.
+func bdaddr(mac [6]byte) [6]byte {
+	var out [6]byte
+	for i := range mac {
+		out[i] = mac[len(mac)-1-i]
+	}
+	return out
 }
 
 // ParseAddress reads a Bluetooth address written AA:BB:CC:DD:EE:FF.

@@ -17,11 +17,17 @@ PanelBase {
   // The address this panel opened the helper for; empty when none.
   property string held: ""
 
+  // Follow the connected HT3: release the helper when it disconnects, and
+  // start it again when it (or another HT3) connects while the panel is open.
   function hold() {
-    if (panel.held !== "" || !panel.device)
+    const address = panel.device ? panel.device.address : ""
+    if (address === panel.held)
       return
-    panel.held = panel.device.address
-    Ht3.acquire(panel.held)
+    if (panel.held !== "")
+      Ht3.release()
+    panel.held = address
+    if (address !== "")
+      Ht3.acquire(address)
   }
 
   onDeviceChanged: hold()

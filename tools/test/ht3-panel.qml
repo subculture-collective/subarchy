@@ -77,21 +77,42 @@ ShellRoot {
         test.step++
         break
       case 2:
-        // The second run fails as when the phone app holds the channel.
-        if (Ht3.message.indexOf("Another app") < 0) return
+        // The second run reads the battery, then fails as when the phone
+        // app holds the channel: the error shows and the old reading goes.
+        if (Ht3.message.indexOf("TOZO app") < 0) return
         test.check(test.find(test.panel, "status").text === Ht3.message, "the helper's error is not shown")
+        test.check(Ht3.battery === -1 && Ht3.mode === "", "a reading stayed after the error")
+        test.check(test.find(test.panel, "battery").text === "…", "the old battery stayed on screen")
+        // The headset disconnects and reconnects with the panel open.
+        Bluetooth.device.connected = false
+        test.step++
+        break
+      case 3:
+        test.check(!Ht3.active, "the helper is still held without a connected HT3")
+        test.check(test.find(test.panel, "deviceName").text === "No HT3 connected", "panel without a device")
+        Bluetooth.device.connected = true
+        test.step++
+        break
+      case 4:
+        // The reconnect started the helper again (the third, reading run).
+        if (!(test.lines(started) === 3 && Ht3.connected && Ht3.battery === 89)) return
+        test.check(Ht3.message === "", "the old error stayed after the reconnect")
         holder.active = false
+        test.step++
+        break
+      case 5:
+        if (test.lines(stopped) < 2) return
         Bluetooth.device.connected = false
         holder.active = true
         test.step++
         break
-      case 3:
+      case 6:
         // No HT3 connected: nothing starts.
         if (++test.waited < 10) return
         test.check(test.find(test.panel, "deviceName").text === "No HT3 connected", "panel without a device")
-        test.check(test.lines(started) === 2 && !Ht3.active, "a helper started without a connected HT3")
+        test.check(test.lines(started) === 3 && !Ht3.active, "a helper started without a connected HT3")
         holder.active = false
-        console.log("PASS: HT3 panel reading, error, no device and helper cleanup")
+        console.log("PASS: HT3 panel reading, error, reconnect, no device and helper cleanup")
         Qt.quit()
       }
     }

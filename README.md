@@ -8,15 +8,17 @@ distribution's name; on screen it shows SUBCULT
 ([ADR 0052](docs/decisions/0052-name-identity.md)).
 
 Subarchy is in development and has no release yet. The live ISO builds in CI,
-boots in a VM and installs from that image into an encrypted VM disk. Hardware
-fixes are not yet tested on real machines, and several shell, launcher and
-theming items on the [roadmap](docs/roadmap.md) are still open.
+boots in a VM and installs from that image into an encrypted VM disk, and runs
+on one laptop (sputnik); most hardware fixes are untested on real machines.
+Several shell, launcher and theming items on the [roadmap](docs/roadmap.md) are
+still open.
 
 ## Features
 
 - **Live ISO** built with archiso: UEFI only, systemd-boot, `linux-zen`.
-- **Guided installer** (`subarchy-setup`): asks for keyboard layout, disk,
-  computer name, user, password, disk passphrase and time zone, checks each
+- **Guided installer** (`subarchy-setup`): asks for language, keyboard layout,
+  Wi-Fi network, disk, computer name, user, password, disk passphrase and time
+  zone (guessed from the network), checks each
   answer, shows what is on each disk (and can open it read-only) and asks
   before it wipes one. It can
   install with no network from the package repository on the image.
@@ -59,10 +61,11 @@ Other targets:
 |---|---|---|
 | `make package` | Arch Linux | Builds the `subarchy` pacman package and checks its contents |
 | `make shell-test shell-lint shell-index-check` | `qt6-declarative`, `quickshell` | Tests and lints the QML shell and lock screen |
+| `make shell-native-test` | `quickshell`, `qt6-declarative`, `librsvg`, `imagemagick`, `python` | Draws the panels, greeter and lock offscreen and checks them; screenshots go to `build/*-preview/` |
 | `make iso` | `archiso`, sudo | Builds the live ISO into `build/iso/` |
 | `make iso-test` | `qemu-base`, `edk2-ovmf` | Boots the newest ISO in QEMU and checks it over the serial console |
-| `make install-test` | `qemu-base`, `edk2-ovmf` | Installs from the newest ISO into a VM disk, then boots and checks the result |
-| `make install-test-offline` | `qemu-base`, `edk2-ovmf` | The same through the guided installer with the guest's network off |
+| `make install-test` | `qemu-base`, `edk2-ovmf`, `swtpm`, `imagemagick` | Installs from the newest ISO into a VM disk, then boots and checks the result |
+| `make install-test-offline` | `qemu-base`, `edk2-ovmf`, `swtpm`, `imagemagick` | The same through the guided installer with the guest's network off |
 
 `tools/test/shell-headless.sh shell` runs the shell in a private headless
 sway session. Details are in [iso/README.md](iso/README.md) and
@@ -99,7 +102,7 @@ bin/           subcult-* shell commands
 branding/      backgrounds, marks, fonts, os-release, screensaver
 cmd/           Go commands (subcult, subarchy-setup, subcult-*)
 internal/      Go packages behind the commands
-config/        user config templates
+config/        unused (see default/)
 default/       system defaults (Hyprland, SDDM, Plymouth, theme, app catalogue)
 install/       installer script and package lists
 iso/           archiso profile
@@ -107,7 +110,7 @@ lock/          lock screen (Quickshell)
 migrations/    upgrade migrations
 packaging/     PKGBUILDs: subarchy, keyring, Neovim, pinned AUR rebuilds
 shell/         desktop shell (Quickshell)
-themes/        themes
+themes/        unused (see default/)
 tools/         build, test, ISO, theme and inventory scripts
 docs/          decisions, inventory, brand notes and roadmap
 ```

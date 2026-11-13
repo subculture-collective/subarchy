@@ -18,6 +18,7 @@ import (
 	"strings"
 	"syscall"
 
+	"git.subcult.tv/subculture-collective/subarchy/internal/atomicfile"
 	"git.subcult.tv/subculture-collective/subarchy/internal/dispatch"
 	"git.subcult.tv/subculture-collective/subarchy/internal/update"
 )
@@ -35,7 +36,7 @@ var routes = []dispatch.Described{
 		Args:    "[--pending | --mark-all]", Examples: []string{"subcult update migrate --pending"}}},
 	{Words: []string{"update", "privileged"}, Metadata: dispatch.Metadata{
 		Summary: "Run one root step of the update (used through sudo)",
-		Args:    "snapshot | upgrade [--noconfirm] | prune", Hidden: true, RequiresSudo: true}},
+		Args:    "snapshot | upgrade [--noconfirm] | prune | services", Hidden: true, RequiresSudo: true}},
 }
 
 // selfPath is the installed helper used for the privileged steps.
@@ -164,7 +165,10 @@ func (a *app) update(ctx context.Context, yes, noSnapshot, dryRun bool) int {
 		HyprlandSession: os.Getenv("HYPRLAND_INSTANCE_SIGNATURE") != "",
 	}}
 	rep, err := u.Run(ctx)
-	if err != nil {
+	// After a failed migration the packages are replaced and every other
+	// step has run: show the report and refresh the indicator, then fail.
+	var migErr *update.MigrationError
+	if err != nil && !errors.As(err, &migErr) {
 		return a.fail(err)
 	}
 	fmt.Fprint(a.stdout, "\n"+rep.Summary())
@@ -176,11 +180,12 @@ func (a *app) update(ctx context.Context, yes, noSnapshot, dryRun bool) int {
 			fmt.Fprintln(a.stdout, "warning: the update indicator could not be refreshed.")
 		}
 	}
+	if err != nil {
+		return a.fail(err)
+	}
 	return 0
 }
 
-// check prints the number of available updates. Exit 0 when there are
-// updates, 2 when there are none (checkupdates' convention), 1 on error.
 // privileged runs one fixed root step after normal sudo authentication
 // (ADR 0069).
 func (a *app) privileged(ctx context.Context, step string) int {
@@ -227,18 +232,18 @@ func stateDir() (string, error) {
 	return filepath.Join(state, "subcult"), nil
 }
 
-// writeState records the update count for the bar (ADR 0026).
+// writeState records the update count for the bar (ADR 0026), in one step
+// so the bar never reads an empty file.
 func (a *app) writeState(n int) error {
 	dir, err := a.stateDir()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(dir, "update-count"), []byte(strconv.Itoa(n)+"\n"), 0o644)
+	return atomicfile.Write(filepath.Join(dir, "update-count"), []byte(strconv.Itoa(n)+"\n"), 0o644)
 }
 
+// check prints the number of available updates. Exit 0 when there are
+// updates, 2 when there are none (checkupdates' convention), 1 on error.
 func (a *app) check(ctx context.Context, quiet, state bool) int {
 	if !a.runner.Has("checkupdates") {
 		return a.fail(errors.New("checkupdates not found (pacman-contrib)"))

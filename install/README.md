@@ -18,7 +18,13 @@ under the SUBCULT mark, with `gum` drawing the lists and inputs. The
 language screen sets the installed system's locale (the installer stays
 in English) and preselects that language's usual keyboard. The
 keyboard comes from a labelled list, the time zone from a searchable
-list, and the disk from a list that shows what is on each one. After
+list, and the disk from a list that shows what is on each one, internal
+disks before USB and removable ones. The time zone list opens on a
+guess: online, the zone of the network's location, from whichever of
+ipapi.co and ipwho.is answers first within 4 seconds (the request sends
+them the network's public address); otherwise the zone of the chosen
+language's country, or UTC for a language spoken across several, such
+as English (US). The page says where the guess came from. After
 choosing a disk the user can install there, browse it read-only first, or
 pick another. Before the browse opens, a page lists the partitions it
 mounted read-only and the ones it left closed (encrypted, LVM, RAID, ZFS,
@@ -31,7 +37,11 @@ so far at the right, a bar with a percentage, the current phase and a
 rotating tip (`progress.go`). L switches a window with the end of the
 install log on and off; the raw output goes to `/var/log/subarchy-install.log`,
 which is also where the percentage is read from. The finish screen offers
-"Reboot now", and a failure shows the end of the log with a menu. `--plain`
+"Reboot now". A failure says why the install stopped (subarchy-install's
+own fatal message, the line that starts `subarchy-install: error:`, else
+the last pacman or mkinitcpio error; its warnings, such as a failed
+`pult apply`, never count) and at which step,
+shows the end of this run's log and offers a menu. `--plain`
 gives the prompts below instead.
 
 After the keyboard comes a network page, but only when no link has a
@@ -87,7 +97,8 @@ file, an empty user menu and the nicedark skin, whose text stays readable
 in the installer palette. Typed letters search the panel, and Return on a
 file does not run it. `mc`'s pull-down menus can still run a command
 typed into one of their dialogs, as root. It then asks for the computer name, user name and password
-and time zone. The disk passphrase is the user's password unless the user
+and time zone; online, the time zone's default is the network's zone,
+found as on the screens. The disk passphrase is the user's password unless the user
 asks for a separate one. The desktop layout and variant come from
 systemd's `kbd-model-map`. Each answer is checked as it is entered. The user confirms
 with a yes/no question whose default is no. It then writes the config and
@@ -103,7 +114,10 @@ packages come from the repository on the image, `/opt/subarchy/repo`.
 The scripted stage. It runs as root on the live ISO, reads a `KEY=value`
 config file (keys listed in the script's header) and needs `--yes`, because
 it wipes the disk named by `DISK`. It refuses a disk that has mounted
-partitions or that holds the install medium. Other disks are left alone.
+partitions or that holds the install medium, and a user name that is
+already an account or group on the live image, or one of the groups the
+installed system adds (`docker`, `realtime`), which `useradd` would refuse
+after the wipe. Other disks are left alone.
 
 What it builds:
 
@@ -116,19 +130,18 @@ What it builds:
 | Boot | Limine with its own firmware entry and the `EFI/BOOT` fallback; menu from `/etc/default/limine` | 0007 |
 | Snapshots | snapper config `root` for `@`, 5 numbered, no timeline; `limine-snapper-sync` adds a boot entry per snapshot | 0011 |
 | System | zram swap, NetworkManager, timesyncd, user in `wheel` with zsh, root locked | 0014, 0016 |
+| Hardware | `subcult-hw` picks firmware, microcode, GPU drivers, services and fixes; the wireless regulatory domain from the time zone, applied by `wireless-regdb` | 0005, 0006, 0050 |
 | Wi-Fi | with `WIFI_SSID` set, a NetworkManager connection for that network, mode 600, with the passphrase from `WIFI_PSK_FILE` (none for an open network); a name that is not plain letters, digits, `_ . -` and inner spaces is written as its bytes; the file name never starts with a dot, which NetworkManager would skip; `key-mgmt=wpa-psk`, which NetworkManager also uses for WPA3 (SAE) when the Wi-Fi card supports it | 0016 |
-| Containers | Docker with compose and buildx; `docker.socket` enabled so the daemon starts on demand; the user is not in the `docker` group (`sudo subcult docker sudoless` grants it behind a warning); `ufw-docker` rules added at first boot by `subcult-ufw-docker.service` | 0055, 0019 |
-| Tailscale | `tailscale` installed, `tailscaled` enabled; nobody is signed in until the user runs `sudo tailscale up` | 0058 |
+| Containers | Docker with compose and buildx; `docker.socket` enabled so the daemon starts on demand; the user is not in the `docker` group (`sudo subcult docker sudoless` grants it behind a warning), and lazydocker (`subcult docker tui`, the launcher's lazydocker entry) reaches the daemon through a polkit prompt; `ufw-docker` rules added at first boot by `subcult-ufw-docker.service` | 0055, 0019 |
+| Tailscale | `tailscale` installed, `tailscaled` enabled; nobody is signed in until the user signs in from the bar's Tailscale panel (or `sudo tailscale up`). No account is tailscaled's operator: the panel goes through a root helper under the polkit action `tv.subcult.tailscale`. The installer enables `subcult-taildrop@<user>.service`, which saves files sent with Taildrop to the user's `~/Downloads` | 0058, 0062 |
 | Shell setup | the user's `~/.zshrc` and `~/.bashrc` source `/usr/share/subcult/default/shell/zshrc` and `bashrc`: aliases, functions, starship with Subarchy's prompt, atuin (Ctrl-R), zoxide, fzf keys, mise | 0041 |
 | Services | ufw (incoming denied; LocalSend's 53317 tcp and udp open), AppArmor, systemd-resolved with Quad9 DoT, Avahi, power-profiles-daemon, thermald on Intel, BlueZ, Plymouth | 0013, 0018-0021, 0063 |
 | Command-line tools | `packages/cli.txt`: the app list's command-line and terminal apps (shell tools, starship, atuin, btop, yazi, lazygit, tmux, forge clients, media tools, Codex and OpenCode) | 0041, 0044 |
-| Desktop | `packages/desktop.txt`: SDDM, Hyprland under uwsm, portals, PipeWire, kitty, fonts; the user's `~/.config/hypr/hyprland.lua` | 0017, 0029-0033, 0040 |
+| Desktop | `packages/desktop.txt`: SDDM, Hyprland under uwsm, portals, PipeWire, kitty, fonts, and the app list's preinstalled desktop apps; the user's `~/.config/hypr/hyprland.lua` | 0017, 0029-0033, 0040 |
 | Boot entries | firmware entries named Limine or Subarchy whose partition no longer exists (left by an earlier install on a disk since wiped) are removed; other systems' entries are not touched | 0007 |
 | Factory reset | read-only `@factory` snapshot of the fresh `@` | 0049, 0056 |
 
-Not yet: the
-Quickshell shell and themes, hardware detection, and a Limine entry that
-chainloads another disk's bootloader.
+Not yet: a Limine entry that chainloads another disk's bootloader.
 
 A new system is on the stable channel: Arch packages come from the Arch
 Linux Archive at the snapshot date the package ships; `subcult channel set

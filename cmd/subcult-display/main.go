@@ -269,51 +269,72 @@ func (a *app) watch(store display.Store) int {
 	if err != nil {
 		return a.fail(err)
 	}
-	if p, ok := store.Match(ms); ok {
-		if code := a.apply(p, ms, false); code != 0 {
-			return code
-		}
+	// A profile that no longer applies (a mode the monitor stopped offering)
+	// is reported, not fatal: exiting would restart the service into the
+	// same failure until systemd's start limit stops it for the session.
+	// apply and syncLid print their own errors. A layout counts as handled
+	// once both worked, so a failure is tried again at the next monitor
+	// event, also for the same monitors. The retry is bounded: a failed
+	// apply or the lid sync after it turns outputs on and off, and those
+	// events would otherwise trigger the next attempt without end.
+	const maxTries = 2
+	ok := true
+	if p, found := store.Match(ms); found {
+		ok = a.apply(p, ms, false) == 0
 	}
-	if code := a.syncLid(); code != 0 {
-		return code
+	if a.syncLid() != 0 {
+		ok = false
 	}
 	debounce := time.Duration(store.Debounce) * time.Millisecond
 	if debounce <= 0 {
 		debounce = display.DefaultDebounceMs * time.Millisecond
 	}
-	last := display.Identity(ms)
+	last, handled, tries := display.Identity(ms), ok, 1
 	sc := bufio.NewScanner(conn)
+	// windowtitlev2>> lines carry whole window titles.
+	sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
 	for sc.Scan() {
 		if !display.MonitorEvent(sc.Text()) {
 			continue
 		}
+		// Each monitor event waits the debounce (Hyprland sends a v1 and a
+		// v2 line per change); a layout already applied is skipped by the
+		// identity check below.
 		a.sleep(debounce)
-		// Later events during the wait are already in the buffer; the
-		// layout is read once, after them.
 		ms, _, err := a.live()
 		if err != nil {
 			fmt.Fprintf(a.stderr, "subcult display: %v\n", err)
 			continue
 		}
 		id := display.Identity(ms)
-		if len(last) == len(id) && strings.Join(last, "\x00") == strings.Join(id, "\x00") {
+		same := len(last) == len(id) && strings.Join(last, "\x00") == strings.Join(id, "\x00")
+		if same && handled {
 			continue
 		}
-		last = id
+		if !same {
+			last, tries = id, 0
+		}
+		tries++
+		handled = tries >= maxTries
 		store, err = display.Load(a.store) // the user may have saved a profile meanwhile
 		if err != nil {
 			fmt.Fprintf(a.stderr, "subcult display: %v\n", err)
 			continue
 		}
-		p, ok := store.Match(ms)
-		if !ok {
+		ok := true
+		if p, found := store.Match(ms); !found {
 			fmt.Fprintf(a.stdout, "monitors changed (%s): no saved profile, left as is\n", strings.Join(id, "; "))
-		} else if code := a.apply(p, ms, false); code != 0 {
-			return code
+		} else {
+			ok = a.apply(p, ms, false) == 0
 		}
-		if code := a.syncLid(); code != 0 {
-			return code
+		if a.syncLid() != 0 {
+			ok = false
 		}
+		handled = handled || ok
+	}
+	// A read error exits non-zero so Restart=on-failure brings it back.
+	if err := sc.Err(); err != nil {
+		return a.fail(err)
 	}
 	return 0
 }

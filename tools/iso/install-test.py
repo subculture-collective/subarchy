@@ -247,7 +247,7 @@ def guided(serial: Serial, qmp: Path, timeout: float) -> str:
         ("Does this look right", ["ret"]),
         ("Erase /dev/vda and install Subarchy?", ["y"]),
     ]
-    headings = True
+    headings, zone_note = True, False
     for shown, keys in steps:
         screen = wait_console(serial, 2, shown, 60, unless=NETWORK_PAGE if shown == "Time zone" else None)
         if shown == "Time zone":
@@ -257,6 +257,17 @@ def guided(serial: Serial, qmp: Path, timeout: float) -> str:
             print(f"install-test: {'ok  ' if skipped else 'FAIL'} the network page is skipped without Wi-Fi to offer")
             if not skipped:
                 raise TimeoutError("the network page showed in a VM with no Wi-Fi")
+            # English (US) has no zone of its own, so a guess can only come
+            # from the network, and only when the VM is online and the
+            # geo-IP services answer; which one appeared is logged.
+            if "Guessed from where your network is." in screen:
+                guess = "from the network"
+            elif "Guessed from the language" in screen:
+                guess = ""
+            else:
+                guess = "none (offline or no answer)"
+            print(f"install-test: {'ok  ' if guess else 'FAIL'} time zone guess: {guess or 'from the language, which English (US) has none of'}")
+            zone_note = bool(guess)
         time.sleep(0.5)
         # The time zone and the computer name are machine questions.
         if shown in ("Time zone", "Computer name>") and "Let's set up your machine." not in screen:
@@ -305,7 +316,7 @@ def guided(serial: Serial, qmp: Path, timeout: float) -> str:
     screendump(qmp, VM / "installer-end.png")
     zone = "TIMEZONE=America/Chicago" in serial.run("cat /run/subarchy-setup/install.conf")
     print(f"install-test: {'ok  ' if zone else 'FAIL'} typing chi picked America/Chicago")
-    done = "Installed Subarchy in" in screen and view and log_window and autostart and font and headings and hooks and not zero and zone
+    done = "Installed Subarchy in" in screen and view and log_window and autostart and font and headings and hooks and not zero and zone and zone_note
     if "Installed Subarchy in" in screen:
         send_keys(qmp, "n")  # no reboot: the test powers the VM off
     log = serial.run("cat /var/log/subarchy-install.log", timeout=60)
@@ -470,12 +481,13 @@ UNTHEMED = {"dolphin": ("141618", "202326"), "gtk": ("222226", "353535", "F6F5F4
 PROFILE_APPLY = "pult apply -yes -profile /usr/share/subcult/default/theme/subarchy.toml >/dev/null 2>&1"
 
 
-def app_colours(serial: Serial, qmp: Path, sudo: str) -> dict:
+def app_colours(serial: Serial, qmp: Path) -> dict:
     """Dolphin and a GTK 3 window after `pult apply` (ADR 0037, issue #77).
 
-    Dolphin comes from the mirror; the default profile is applied again so
-    Pult sees it. Each app is shown full screen on an empty workspace and
-    captured; `themed` says whether the capture has the palette's colour
+    Dolphin is preinstalled (install/packages/desktop.txt); `pacman -Q`
+    confirms it. The default profile is applied again so Pult sees it.
+    Each app is shown full screen on an empty workspace and captured;
+    `themed` says whether the capture has the palette's colour
     and none of the colours the app shows unthemed. The GTK window is
     checked under the profile. Dolphin is checked under Dracula when the
     installed Pult has its `kde` entry, since the packaged scheme already
@@ -486,7 +498,7 @@ def app_colours(serial: Serial, qmp: Path, sudo: str) -> dict:
     has a `kde` entry and wrote the scheme, and the GTK theme setting.
     """
     state = serial.run(
-        f"{sudo} pacman -S --noconfirm --needed dolphin >/dev/null 2>&1; echo DOLPHIN=$?;"
+        "pacman -Q dolphin >/dev/null 2>&1; echo DOLPHIN=$?;"
         f" {PROFILE_APPLY}; echo APPLY=$?;"
         " echo GTK=$(grep -c '^@import url(\"pult.css\");$' ~/.config/gtk-3.0/gtk.css 2>/dev/null);"
         " echo ADW=$(test -d /usr/share/themes/adw-gtk3-dark/gtk-3.0 && echo 1);"
@@ -695,18 +707,44 @@ def boot(disk: Path, vars_file: Path) -> bool:
                 "systemctl is-enabled tailscaled; systemctl is-active tailscaled;"
                 " tailscale status 2>&1 | grep -ci 'logged out'; tailscale version | head -1"
             ),
+            # No account is tailscaled's operator (ADR 0058, ADR 0062): the
+            # user cannot change tailscaled directly (signed out, `down` would
+            # change nothing anyway), and the panel goes through the root
+            # helper its polkit action names, without a password in the
+            # active session only. Taildrop arrives through a system unit
+            # for the installed user, which waits while signed out and is
+            # wanted by tailscaled, so it starts whenever tailscaled does.
+            "tailscale_helper": serial.run(
+                f"{sudo} tailscale debug prefs | grep -cE '\"OperatorUser\": \"[^\"]+\"';"
+                " tailscale down >/dev/null 2>&1 && echo USER_CONTROLS || echo USER_DENIED;"
+                " pkaction --verbose --action-id tv.subcult.tailscale | grep -E 'implicit (any|active)|exec.path' | tr -s ' ';"
+                " test -x /usr/lib/subcult/tailscale-helper && echo HELPER;"
+                f" test -L /etc/systemd/system/tailscaled.service.wants/subcult-taildrop@{USER}.service && echo WANTED;"
+                f" systemctl is-enabled subcult-taildrop@{USER}.service; systemctl is-active subcult-taildrop@{USER}.service"
+            ),
+            # lazydocker through polkit (ADR 0055): the action names the
+            # root side and keeps the password a while; the launcher entry
+            # starts `subcult docker tui`.
+            "docker_tui": serial.run(
+                "pkaction --verbose --action-id tv.subcult.docker.tui | grep -E 'implicit active|exec.path' | tr -s ' ';"
+                " test -x /usr/lib/subcult/lazydocker-root && echo ROOT_SIDE;"
+                " grep -c '^Exec=subcult-docker-tui$' /usr/share/applications/subcult-lazydocker.desktop"
+            ),
             # One command from each group of install/packages/cli.txt.
             "cli_tools": serial.run(
                 "for c in curl rsync 7z bat eza rg fzf zoxide jq yq tldr starship atuin btop yazi lazygit lazydocker tmux"
                 " fastfetch gh gt tea delta yt-dlp ffmpeg magick dust duf codex opencode cliamp ttfx; do"
                 " command -v $c >/dev/null || echo missing:$c; done; tea --version >/dev/null 2>&1 || echo missing:tea-runs; echo CLI_DONE"
             ),
-            # The apps rebuilt in Subarchy's repository and Proton VPN, from
-            # install/packages/desktop.txt. /usr/bin/voxtype is made by the
-            # package's install script, so it also shows that script ran.
+            # The apps rebuilt in Subarchy's repository, Proton VPN and the
+            # app list's repository apps, from install/packages/desktop.txt.
+            # /usr/bin/voxtype is made by the package's install script, so it
+            # also shows that script ran.
             "desktop_apps": serial.run(
                 "for c in voxtype localsend proton-mail proton-pass pass-cli protonvpn-app protonvpn"
-                " proton-authenticator proton-drive; do command -v $c >/dev/null || echo missing:$c; done; echo APPS_DONE"
+                " proton-authenticator proton-drive dolphin ark chromium signal-desktop halloy obsidian bw"
+                " system-config-printer qalculate-qt okular swayimg grim slurp satty gpu-screen-recorder vlc obs"
+                " kdenlive gimp inkscape glaxnimate qbittorrent; do command -v $c >/dev/null || echo missing:$c; done; echo APPS_DONE"
             ),
             "power_key": serial.run("busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey;"
                                     " busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKeyLongPress"),
@@ -753,8 +791,9 @@ def boot(disk: Path, vars_file: Path) -> bool:
             # The repository key is trusted (ADR 0025, subarchy-keyring).
             "keyring": serial.run(f"{sudo} pacman-key --list-keys CCE8B0F3BCDD601D909773E4466AA6E8241453D2 2>&1 | grep -c 'Arch Registry'"),
             # Hardware fixes (ADR 0050): the VM gets the ones every x86 machine
-            # gets; their files are in place; the regulatory domain follows the zone.
-            "fixes": serial.run("subcult hw fixes; echo ---; cat /etc/modprobe.d/hid_apple.conf; echo ---; grep '^WIRELESS_REGDOM=' /etc/conf.d/wireless-regdom"),
+            # gets; their files are in place; the regulatory domain follows the zone
+            # and wireless-regdb's database is there to apply it.
+            "fixes": serial.run("subcult hw fixes; echo ---; cat /etc/modprobe.d/hid_apple.conf; echo ---; grep '^WIRELESS_REGDOM=' /etc/conf.d/wireless-regdom; test -s /usr/lib/firmware/regulatory.db && echo regdb-ok"),
             # The system screens take the user's palette (ADR 0037): SDDM's
             # theme.conf, Limine's colours, a recoloured splash (one initramfs
             # rebuild), Chromium's colour policy (written though Chromium is not
@@ -808,8 +847,9 @@ def boot(disk: Path, vars_file: Path) -> bool:
         results["greeter_colours"] = distinct_colours(VM / "greeter.png")
         results["greeter_palette"] = colours_in(VM / "greeter.png", 800)
         results["sddm_log"] = serial.run("journalctl -b -o cat | grep -i 'qml' | grep -ci 'error\\|is not a type\\|cannot assign\\|Could not load' ; true")
-        # The installer named the account as SDDM's last user, so the
-        # greeter's user field is filled before the first sign-in.
+        # The installer named the account and session as SDDM's last, so the
+        # greeter's user field is filled and its sign-in starts subarchy.desktop
+        # before the first sign-in.
         results["greeter_user"] = serial.run(f"{sudo} cat /var/lib/sddm/state.conf")
         # Nothing of the desktop runs for the greeter's sddm user: no bar,
         # idle or clipboard service, no graphical-session.target, no
@@ -853,10 +893,6 @@ def boot(disk: Path, vars_file: Path) -> bool:
         # The serial login has no WAYLAND_DISPLAY; the shell runs on the session's.
         shell_ipc = "quickshell ipc --any-display -p /usr/share/subcult/shell call subcult.shell status"
         results["shell_status"] = serial.run(shell_ipc)
-        results["shell_errors"] = serial.run(
-            "journalctl --user -b -u subcult-shell.service --no-pager"
-            " | grep -vE 'Failed to (connect|create) pipewire context|MESA|ZINK'"
-            " | grep -E 'ERROR|TypeError|ReferenceError|is not a type|Cannot assign' | head -5")
         results["layers"] = serial.run("hyprctl -i 0 layers | grep -c 'namespace: subcult-bar'")
         # Exercise the generated commands twice from each state. Merely
         # accepting dispatch is insufficient: an unknown Lua field toggles.
@@ -915,7 +951,6 @@ finally:
         results["nvim"] = serial.run(
             f"{sudo} unshare -n runuser -u $(id -un) -- nvim --headless '+lua print(require(\"lazy\").stats().count)'"
             " '+lua print(\"SCHEME=\" .. tostring(vim.g.colors_name) .. \" LAYER=\" .. tostring(vim.g.subarchy_layer))' +qa 2>&1; echo NVIM_RC=$?", timeout=120)
-        results["cursor"] = serial.run("ls /usr/share/icons/subcult-cursor/cursors/left_ptr /usr/share/icons/subcult-cursor/hyprcursors/default.hlc")
         # The bar and the idle sample come first, before any window is open.
         screendump(qmp, VM / "bar.png")
         results["bar_colours"] = colours_in(VM / "bar.png", 26)
@@ -953,9 +988,8 @@ finally:
         results["pult_restore"] = serial.run(
             "pult apply -yes -profile /usr/share/subcult/default/theme/subarchy.toml >/dev/null 2>&1; echo PULT_RESTORE=$?;"
             " grep -ci '\"base\": \"#100b19\"' ~/.config/subcult/theme/palette.json", timeout=120)
-        # Qt/KDE and GTK apps in Pult's colours (issue #77), after the package
-        # count above, since it installs Dolphin.
-        results["app_colours"] = app_colours(serial, qmp, sudo)
+        # Qt/KDE and GTK apps in Pult's colours (issue #77).
+        results["app_colours"] = app_colours(serial, qmp)
         # The shell's Hyprland dispatches on a Lua config: the workspace click
         # expression (as shell/Commons/HyprDispatch.js writes it).
         results["dispatch"] = serial.run(
@@ -1015,6 +1049,17 @@ finally:
         results["ac_again"] = serial.run(
             f"{sudo} pkill -f '[d]busmock --system --template upower'; {sudo} systemctl start upower.service"
             f" && sleep 2 && systemctl --user restart subcult-shell.service && sleep 8 && {shell_ipc}")
+        # After the restarts above, so their QML errors are read too; -b
+        # covers every start in the boot. The start count is the positive
+        # control: an empty error list only means something when the query
+        # sees all five starts (the session, the automatic restart after the
+        # lock test's SIGKILL, then battery, keep-awake and back on AC).
+        results["shell_starts"] = serial.run(
+            "journalctl --user -b -u subcult-shell.service -o cat --no-pager | grep -c '^Started '")
+        results["shell_errors"] = serial.run(
+            "journalctl --user -b -u subcult-shell.service --no-pager"
+            " | grep -vE 'Failed to (connect|create) pipewire context|MESA|ZINK'"
+            " | grep -E 'ERROR|TypeError|ReferenceError|is not a type|Cannot assign' | head -5")
         time.sleep(3)
         screendump(qmp, VM / "session.png")
         results["session_colours"] = distinct_colours(VM / "session.png")
@@ -1069,8 +1114,8 @@ finally:
         "subcult update authenticates before privileged work": "UNAUTH_STEP_EXIT=1" in r["update"]
         and "UNAUTH_UPDATE_EXIT=1" in r["update"],
         "subcult update reuses authorized sudo": "\nUPDATE_EXIT=0" in r["update"] and "eboot needed" in r["update"],
-        "hardware fixes applied (hid_apple fnmode, regulatory domain US)": "hid-apple-fkeys" in r["fixes"]
-        and "options hid_apple fnmode=2" in r["fixes"] and 'WIRELESS_REGDOM="US"' in r["fixes"],
+        "hardware fixes applied (hid_apple fnmode, regulatory domain US and its database)": "hid-apple-fkeys" in r["fixes"]
+        and "options hid_apple fnmode=2" in r["fixes"] and 'WIRELESS_REGDOM="US"' in r["fixes"] and "regdb-ok" in r["fixes"],
         "new install on the stable channel, switches to edge and back": channel_ok(r["channel"]),
         "repository key trusted (subarchy-keyring)": r["keyring"].strip().splitlines()[-1:] == ["1"],
         "daily update check timer and count": r["update_timer"].splitlines()[0:1] == ["1"]
@@ -1097,8 +1142,11 @@ finally:
         "docker starts on demand, needs sudo, and is behind ufw": r["docker"].split()
         == ["enabled", "disabled", "inactive", "0", "USER_CANNOT", "SUDO_CAN", "active", "1", "COMPOSE", "BUILDX"],
         "tailscale is installed and running, signed out": r["tailscale"].split()[:3] == ["enabled", "active", "1"],
+        "no Tailscale operator; the panel's helper under its polkit action; Taildrop receiver running":
+            tailscale_helper_ok(r["tailscale_helper"]),
+        "lazydocker reaches Docker through its polkit action": docker_tui_ok(r["docker_tui"]),
         "command-line and terminal apps installed": "CLI_DONE" in r["cli_tools"] and "missing:" not in r["cli_tools"],
-        "voxtype, LocalSend and the Proton apps installed": "APPS_DONE" in r["desktop_apps"]
+        "voxtype, LocalSend, the Proton apps and the app list's repository apps installed": "APPS_DONE" in r["desktop_apps"]
         and "missing:" not in r["desktop_apps"],
         "power button: a short press is left to the session, a long press powers off": r["power_key"].split()
         == ["s", '"ignore"', "s", '"poweroff"'],
@@ -1113,6 +1161,8 @@ finally:
         "greeter shows the theme (ink background, no QML errors)": "100B19" in r["greeter_palette"]
         and r["sddm_log"].strip().splitlines()[-1:] == ["0"],
         "greeter offers the installed account before any sign-in": f"User={USER}" in r["greeter_user"].split(),
+        "greeter's first sign-in starts the Subarchy session":
+            "Session=/usr/share/wayland-sessions/subarchy.desktop" in r["greeter_user"].split(),
         "greeter runs no desktop: no bar, idle or clipboard, no session target, no update window":
             greeter_session_ok(r["greeter_session"]),
         "faillock: 10 failures lock for 2 minutes": r["faillock"].split() == ["deny", "=", "10", "unlock_time", "=", "120"],
@@ -1137,13 +1187,14 @@ finally:
         "session drew something": r["session_colours"] > 1,
         "shell service active": "ACTIVE" in r["shell_active"],
         "shell log has no QML errors": r["shell_errors"].strip() == "",
+        "shell log read covers all five shell starts": r["shell_starts"].strip().isdigit()
+        and int(r["shell_starts"].strip()) >= 5,
         "one bar layer per monitor": r["layers"].strip() == "1",
         "full bar with widgets": '"subcult.clock"' in r["shell_status"] and '"subcult.menu"' in r["shell_status"],
         "HT3 widget loaded and hidden without headphones": widget_hidden(r["shell_status"], "subcult.ht3"),
         "bar colours (base, line, text)": {"100B19", "1F1830", "F0ECE4"} <= r["bar_colours"],
         "font roles": r["fonts"].split("\n")[:3] == ["JetBrainsMono Nerd Font", "JetBrainsMono Nerd Font Propo", "Libertinus Mono"],
         "GTK icons and cursor": "'Papirus-Dark'" in r["gtk"] and "'subcult-cursor'" in r["gtk"],
-        "cursor theme installed": "No such file" not in r["cursor"] and "left_ptr" in r["cursor"],
         "Neovim starts offline with its plugins": "NVIM_RC=0" in r["nvim"] and "Failed" not in r["nvim"],
         "Neovim has the Subarchy layer and the subcult scheme": "LAYER=subarchy-nvim" in r["nvim"] and "SCHEME=subcult" in r["nvim"],
         "Discord web app and Vencord Web installed": "WEBAPP_OK" in r["discord"],
@@ -1404,6 +1455,23 @@ def hw_ok(out: str) -> bool:
     wanted = {"GenuineIntel": {"intel-ucode", "thermald"}, "AuthenticAMD": {"amd-ucode"}}.get(vendor.group(1) if vendor else "")
     installed = {w for w in out.split() if w in ("intel-ucode", "amd-ucode", "thermald")}
     return wanted is not None and installed == wanted and "linux-firmware" not in out and "VM:        QEMU" in out
+
+
+def docker_tui_ok(out: str) -> bool:
+    """pkaction's lines for tv.subcult.docker.tui, the root side, the entry."""
+    return ("implicit active: auth_admin_keep" in out
+            and "org.freedesktop.policykit.exec.path -> /usr/lib/subcult/lazydocker-root" in out
+            and out.split()[-2:] == ["ROOT_SIDE", "1"])
+
+
+def tailscale_helper_ok(out: str) -> bool:
+    """No operator, the user refused, the polkit action, the helper, the receiver unit."""
+    words = out.split()
+    return (words[:2] == ["0", "USER_DENIED"]
+            and "implicit any: auth_admin" in out
+            and "implicit active: yes" in out
+            and "org.freedesktop.policykit.exec.path -> /usr/lib/subcult/tailscale-helper" in out
+            and words[-4:] == ["HELPER", "WANTED", "enabled", "active"])
 
 
 def theme_system_ok(out: str) -> bool:

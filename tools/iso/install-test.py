@@ -1022,10 +1022,11 @@ finally:
         results["ac_again"] = serial.run(
             f"{sudo} pkill -f '[d]busmock --system --template upower'; {sudo} systemctl start upower.service"
             f" && sleep 2 && systemctl --user restart subcult-shell.service && sleep 8 && {shell_ipc}")
-        # After the restarts above (battery, keep-awake, back on AC), so their
-        # QML errors are read too; -b covers every start in the boot. The
-        # start count is the positive control: an empty error list only
-        # means something when the query sees all four starts.
+        # After the restarts above, so their QML errors are read too; -b
+        # covers every start in the boot. The start count is the positive
+        # control: an empty error list only means something when the query
+        # sees all five starts (the session, the automatic restart after the
+        # lock test's SIGKILL, then battery, keep-awake and back on AC).
         results["shell_starts"] = serial.run(
             "journalctl --user -b -u subcult-shell.service -o cat --no-pager | grep -c '^Started '")
         results["shell_errors"] = serial.run(
@@ -1154,8 +1155,8 @@ finally:
         "session drew something": r["session_colours"] > 1,
         "shell service active": "ACTIVE" in r["shell_active"],
         "shell log has no QML errors": r["shell_errors"].strip() == "",
-        "shell log read covers all four shell starts": r["shell_starts"].strip().isdigit()
-        and int(r["shell_starts"].strip()) >= 4,
+        "shell log read covers all five shell starts": r["shell_starts"].strip().isdigit()
+        and int(r["shell_starts"].strip()) >= 5,
         "one bar layer per monitor": r["layers"].strip() == "1",
         "full bar with widgets": '"subcult.clock"' in r["shell_status"] and '"subcult.menu"' in r["shell_status"],
         "HT3 widget loaded and hidden without headphones": widget_hidden(r["shell_status"], "subcult.ht3"),

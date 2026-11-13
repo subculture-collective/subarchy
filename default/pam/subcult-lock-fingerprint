@@ -5,5 +5,13 @@
 # reader the module fails and the password still unlocks. pam_fprintd's
 # defaults hold: three touches or 30 seconds per check, then the lock
 # starts another.
-auth     required  pam_fprintd.so
-account  include   system-auth
+#
+# pam_faillock (ADR 0063): an account locked by password failures is locked
+# to the finger too, and a fingerprint unlock clears the failure count, as
+# a password unlock does. Fingerprint misses are not counted, so a wrong
+# finger cannot lock the password out. Each line is requisite or required
+# and no other module can grant access, so only a matching finger unlocks.
+auth     requisite  pam_faillock.so preauth
+auth     requisite  pam_fprintd.so
+auth     required   pam_faillock.so authsucc
+account  include    system-auth

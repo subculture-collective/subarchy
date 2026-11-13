@@ -44,7 +44,8 @@ the recovery from a text console when the replacement keeps failing).
 Fingerprint unlock (#93, [ADR 0023](../docs/decisions/0023-authentication.md))
 is a second PAM check beside the password's, never part of it:
 `/etc/pam.d/subcult-lock` stays the password stack, and
-`/etc/pam.d/subcult-lock-fingerprint` holds only `pam_fprintd`. At start the
+`/etc/pam.d/subcult-lock-fingerprint` holds `pam_fprintd` between two
+`pam_faillock` lines. At start the
 lock asks `fprintd-list` (fprintd's D-Bus `GetDevices` and
 `ListEnrolledFingers`) whether a reader has a finger enrolled for the user.
 Only then does it run the fingerprint check and show "Or touch the
@@ -60,6 +61,22 @@ away back off up to 40 s, and after three the line says the reader is not
 answering. The password works throughout. `FingerprintModel.js` holds the
 probe parsing, the pacing and the text, tested in `tests/`;
 `SUBCULT_LOCK_FINGERPRINT_PAM` points the headless test at a stand-in stack.
+
+Faillock ([ADR 0063](../docs/decisions/0063-security-hardening.md)): while
+password failures have the account locked, the fingerprint check is refused
+too, and backs off like a reader that fails. A fingerprint unlock clears the
+failure count, as a password unlock does. Wrong fingers are not counted, so
+they cannot lock the password out; as with hyprlock, there is no limit on
+touches beyond pam_fprintd's three per check.
+
+The "not recognised" line and the reader's recovery from "not answering"
+match pam_fprintd's English messages. In another language the line keeps
+saying "Or touch the fingerprint reader" after a wrong finger, and the
+password and the fingerprint still unlock.
+
+The check runs for as long as the lock is up, through the screensaver and
+display-off, so fprintd keeps the reader claimed. Whether that stops USB
+autosuspend or upsets readers after suspend is not tested yet.
 
 `subcult setup fingerprint` installs fprintd where `subcult hw fingerprint`
 finds a reader, enrolls a finger with `fprintd-enroll` and checks it with

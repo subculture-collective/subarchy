@@ -42,8 +42,15 @@ fi
 devices=$(LC_ALL=C fprintd-list "$user" 2>&1 || true)
 [[ $devices != *"No devices available"* ]] || die "fprintd finds no reader it can use (libfprint may not support this one)"
 
-echo "Enrolling your right index finger: touch the reader, lift, and touch it again until it says enroll-completed."
+# fprintd-enroll picks the first finger not yet enrolled, so each run adds
+# one; the list afterwards says which.
+echo "Enrolling a finger: touch the reader, lift, and touch it again until it says enroll-completed."
 sudo fprintd-enroll "$user" || die "enrollment did not finish; run this again"
 echo "Now touch the reader once more to check it."
 fprintd-verify || die "the check did not match; run this again, or remove with: subcult setup fingerprint remove"
-echo "Done. The lock screen takes this finger; the password still works. To undo: subcult setup fingerprint remove"
+fingers=()
+while IFS= read -r l; do
+  [[ $l =~ ^[[:space:]]*-[[:space:]]*\#[0-9]+:[[:space:]]*(.+)$ ]] && fingers+=("${BASH_REMATCH[1]}")
+done < <(LC_ALL=C fprintd-list "$user" 2>/dev/null || true)
+((${#fingers[@]} == 0)) || echo "Enrolled: ${fingers[*]}"
+echo "Done. The lock screen takes these fingers; the password still works. Run this again to add another finger. To undo: subcult setup fingerprint remove"

@@ -150,10 +150,8 @@ ShellRoot {
     running: true
     command: ["sh", "-c", Fingerprint.PROBE, "sh", root.pamDir + "/" + root.fingerprintConfig]
     stdout: StdioCollector {
-      id: probeOut
-      waitForEnd: true
+      onStreamFinished: root.probed(text)
     }
-    onExited: root.probed(probeOut.text)
   }
 
   Timer {

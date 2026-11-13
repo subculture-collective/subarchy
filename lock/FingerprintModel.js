@@ -56,6 +56,8 @@ function isUnavailable(streak) {
 // What pam_fprintd said during a check. "Failed to match fingerprint" is a
 // touch that was not recognised; "Place your finger on …" means the reader
 // answers again. "Verification timed out" and the rest change nothing.
+// These are pam_fprintd's English texts; in another language a miss keeps
+// the "ready" line (lock/README.md).
 function message(mode, text, isError) {
   if (mode === "off")
     return mode

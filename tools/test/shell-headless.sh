@@ -1058,6 +1058,27 @@ if command -v wtype >/dev/null; then
   exited "the lock did not unlock on the password while the fingerprint check waited"
   touch "$work/pam/touch"
   echo "lock: unlocked on the password while the fingerprint check waited"
+  # Stacks a broken reader or a wrong /etc/pam.d file would give: one that
+  # fails at once, one that asks for a password (it gets no answer and is
+  # stopped), and the shipped stack, whose pam_fprintd is not installed
+  # here. The lock stays locked, the line says the reader is not answering
+  # after three quick failures, and the password still unlocks.
+  printf 'auth required pam_deny.so\naccount required pam_permit.so\n' >"$work/pam/subcult-test-fp-deny"
+  printf 'auth required pam_exec.so expose_authtok /usr/bin/true\naccount required pam_permit.so\n' >"$work/pam/subcult-test-fp-asks"
+  cp "$root/default/pam/subcult-lock-fingerprint" "$work/pam/subcult-test-fp-shipped"
+  printf 'auth required pam_permit.so\naccount required pam_permit.so\n' >"$work/pam/subcult-test"
+  for fp in deny asks shipped; do
+    PATH=$work/fp-bin:$PATH SUBCULT_PATH=$work/art SUBCULT_LOCK_PAM=subcult-test SUBCULT_LOCK_FINGERPRINT_PAM=subcult-test-fp-$fp \
+      SUBCULT_LOCK_PAM_DIR=$work/pam HOME=$home1 quickshell -n -p "$root/lock" >>"$work/lock-fp.log" 2>&1 &
+    lockpid=$!
+    pids+=("$lockpid")
+    for _ in $(seq 60); do lk=$(lockst 2>/dev/null) && [[ $lk == *'"fingerprint":"unavailable"'* ]] && break; sleep 0.5; done
+    [[ $lk == *'"locked":true'* && $lk == *'"fingerprint":"unavailable"'* ]] ||
+      fail "fingerprint stack $fp did not back off to unavailable, or unlocked: ${lk:-no answer} $(tail -3 "$work/lock-fp.log")"
+    wtype -s 150 -k Return 'secret' -k Return
+    exited "the password did not unlock beside fingerprint stack $fp"
+  done
+  echo "lock: failing, asking and module-less fingerprint stacks back off and never unlock; the password still does"
   grep -vE '^MESA|ZINK' "$work/lock-fp.log" | grep -nE 'ERROR|TypeError|ReferenceError' && fail "QML errors in the fingerprint lock log"
 else
   echo "shell-headless: wtype not installed, lock check skipped"

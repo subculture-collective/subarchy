@@ -106,13 +106,17 @@ be drawn by the lock screen, which hyprlock cannot do.
   plays VP9 WebM loops of about ten seconds with Qt Multimedia; on battery
   it shows still art, as decided above.
 - 2026-11-12: fingerprint unlock (GitHub #93, Gitea #117). The lock runs a
-  second PAM check, `/etc/pam.d/subcult-lock-fingerprint` (`pam_fprintd`
-  only), beside the unchanged password stack, and only when `fprintd-list`
-  reports a finger enrolled for the user; otherwise no fingerprint line
-  shows and the module never runs. Either check unlocks. `subcult setup
-  fingerprint` installs fprintd, enrolls and verifies a finger, and edits
-  no PAM file. The headless test unlocks with a stand-in fingerprint stack
-  beside a refused password, and with the password while the fingerprint
-  check waits. Not yet tested: a real reader, and fprintd after suspend.
+  second PAM check, `/etc/pam.d/subcult-lock-fingerprint`, beside the
+  unchanged password stack, and only when `fprintd-list` reports a finger
+  enrolled for the user; otherwise no fingerprint line shows and the
+  module never runs. Either check unlocks. The stack is `pam_fprintd`
+  between `pam_faillock` preauth and authsucc: a password lockout locks the
+  finger out too, a fingerprint unlock clears the count, and wrong fingers
+  are not counted. `subcult setup fingerprint` installs fprintd, enrolls
+  and verifies a finger, and edits no PAM file. The headless test unlocks
+  with a stand-in fingerprint stack beside a refused password and with the
+  password while the fingerprint check waits; a stand-in stack that fails
+  at once, and one that asks for a password, never unlock. Not yet tested:
+  a real reader, and fprintd after suspend.
 
 Related: [[decision-map|Decision map]] · [[0034-shell-toolkit|ADR 0034]] · [[0035-plugin-api|ADR 0035]]

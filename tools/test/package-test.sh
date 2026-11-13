@@ -49,7 +49,11 @@ for path in etc/pam.d/subcult-lock etc/pam.d/subcult-lock-fingerprint usr/share/
   grep -qx "$path" <<<"$list" || fail "missing $path"
 done
 bsdtar -xOf "$pkg" etc/pam.d/subcult-lock | grep -q pam_fprintd && fail "the lock's password stack runs pam_fprintd"
-bsdtar -xOf "$pkg" etc/pam.d/subcult-lock-fingerprint | grep -Eq '^auth +required +pam_fprintd\.so$' || fail "the fingerprint stack does not require pam_fprintd"
+fpstack=$(bsdtar -xOf "$pkg" etc/pam.d/subcult-lock-fingerprint)
+grep -Eq '^auth +requisite +pam_fprintd\.so$' <<<"$fpstack" || fail "the fingerprint stack does not require pam_fprintd"
+# Only pam_fprintd can say yes; pam_faillock can only refuse (ADR 0063).
+grep -E '^auth' <<<"$fpstack" | grep -Ev '^auth +(requisite|required) +pam_(fprintd|faillock)\.so( |$)' && fail "the fingerprint stack has another way in"
+grep -Eq '^auth +requisite +pam_faillock\.so preauth$' <<<"$fpstack" || fail "the fingerprint stack ignores a faillock lockout"
 
 # The lock ships videos, stills and the captures used to recolour them.
 for name in beams decrypt matrix; do

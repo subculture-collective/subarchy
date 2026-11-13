@@ -28,13 +28,14 @@ stub subcult '[[ -e $FP_TEST/reader ]]'
 # Installing fprintd puts its tools on PATH.
 stub pacman 'for t in "$FP_TEST"/fprintd/*; do ln -sf "$t" "$FP_TEST/bin/"; done'
 stub fprintd-list 'if [[ -e $FP_TEST/no-devices ]]; then echo "No devices available"; exit 1; fi
+if [[ -e $FP_TEST/enrolled ]]; then echo "Fingerprints for user x on Reader (press):"; echo " - #0: right-thumb"; exit 0; fi
 echo "User x has no fingers enrolled for Reader."' fprintd
-stub fprintd-enroll '[[ ! -e $FP_TEST/enroll-fails ]]' fprintd
+stub fprintd-enroll '[[ ! -e $FP_TEST/enroll-fails ]] && : >"$FP_TEST/enrolled"' fprintd
 stub fprintd-verify '' fprintd
 stub fprintd-delete '' fprintd
 
 fresh() { # no fprintd; "reader" plugs one in
-  rm -f "$work/calls" "$work/reader" "$work"/bin/fprintd-*
+  rm -f "$work/calls" "$work/reader" "$work/enrolled" "$work"/bin/fprintd-*
   : >"$work/calls"
   [[ ${1:-} != reader ]] || : >"$work/reader"
 }
@@ -56,6 +57,8 @@ grep -q '^sudo fprintd-enroll' "$work/calls" || fail "enrollment did not run thr
 (($(line 'fprintd-enroll') > $(line 'pacman'))) || fail "enrolled before fprintd was installed"
 (($(line 'fprintd-verify') > $(line 'fprintd-enroll'))) || fail "verified before enrolling: $(tr '\n' ';' <"$work/calls")"
 grep -q 'password still works' "$work/out" || fail "the result does not say the password still works"
+grep -q 'Enrolled: right-thumb' "$work/out" || fail "the result does not say which finger fprintd enrolled: $(<"$work/out")"
+grep -qi 'right index' "$work/out" && fail "the result names a finger fprintd-enroll did not choose"
 
 # Again with fprintd in place: it is not installed twice.
 : >"$work/calls"

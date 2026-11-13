@@ -228,6 +228,8 @@ FocusScope {
       }
 
       Text {
+        id: passwordMessage
+        objectName: "lockMessage"
         anchors.top: field.bottom
         anchors.topMargin: 8
         anchors.horizontalCenter: parent.horizontalCenter
@@ -242,14 +244,14 @@ FocusScope {
         font.pixelSize: 14
       }
 
-      // The fingerprint line, in the same place when the password check has
-      // nothing to say.
+      // The fingerprint line, under the password check's message when there
+      // is one, so a wrong finger still shows after a wrong password.
       Text {
         objectName: "lockFingerprint"
-        anchors.top: field.bottom
-        anchors.topMargin: 8
+        anchors.top: passwordMessage.visible ? passwordMessage.bottom : field.bottom
+        anchors.topMargin: passwordMessage.visible ? 4 : 8
         anchors.horizontalCenter: parent.horizontalCenter
-        visible: view.lockState.prompt && view.lockState.message === "" && view.fingerprintHint !== ""
+        visible: view.lockState.prompt && view.fingerprintHint !== ""
         text: view.fingerprintHint
         width: Math.min(implicitWidth, view.width - 48)
         horizontalAlignment: Text.AlignHCenter

@@ -674,8 +674,8 @@ checks the result on `sputnik` (scale 1.6, real tray apps, real battery).
 
 ## Outcome (2026-11-07)
 
-Executed in one session, one PR per phase, each reviewed by a fresh
-reviewer before merge: Gitea #21 and #23 (look layer and its fixes), Gitea
+Executed in one session, one PR per phase, reviewed by a fresh reviewer
+except as noted below: Gitea #21 and #23 (look layer and its fixes), Gitea
 #22 (`subcult font`), Gitea #24 (shell core), Gitea #25 (widgets and
 services), and the Phase E PR (VM checks and these docs). Gitea #21 merged
 before its review finished, and Gitea #23, its fix-up, had no fresh review

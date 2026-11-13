@@ -25,10 +25,9 @@ review can be a yes/no pass.
 
 ## How to review
 
-1. Go through [[triage]] and change any **Proposed** value you
-   disagree with. Leave the rest.
-2. Answer what you can in [[open-questions]]. Unanswered
-   items stay open; they do not block the inventory.
+1. Start with [[next-decisions]]: it lists everything still open.
+2. Each document states a default. Change what you disagree with and leave
+   the rest.
 3. When a review document is done, set its `review` property to `done`. It
    then drops out of the list below.
 

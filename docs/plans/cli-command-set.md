@@ -10,6 +10,9 @@ aliases: [CLI command set, E1]
 
 # Distribution CLI: the Bash command set
 
+Implemented under Epic E (GitHub #10), 2026-11-13. The command lists below are as
+of 2026-11-08.
+
 GitHub #24 (E1), under Epic E #10. [[0046-distribution-cli|ADR 0046]]
 puts stateful logic in Go and thin glue in Bash under one dispatcher,
 `subcult <group> <action>`.

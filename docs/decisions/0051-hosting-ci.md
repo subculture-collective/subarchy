@@ -44,13 +44,14 @@ Decision map item R6. Accepted 2026-11-06.
 - 2026-11-10: the direction is reversed. GitHub
   `subculture-collective/subarchy` is the source: branches, pull requests
   and issues live there, and the repository is public. Every pushed branch
-  runs `.github/workflows/mirror-ci.yml` (`make verify`, the core package
-  build and the headless shell), and branch protection requires its
-  "Mirror CI gate" job; `.github/workflows/auto-merge.yml` turns on
-  auto-merge for ready pull requests. Kvant fast-forwards `main` to Gitea,
-  where pull requests and issues are turned off, so `.gitea/workflows/`
-  runs only on `main` and on demand: the package build and publishing, the
-  pinned AUR rebuilds, the ISO and the VM install test. Their
+  except `main` runs `.github/workflows/mirror-ci.yml` (`make verify`, the
+  core package build and the headless shell), and branch protection
+  requires its "Mirror CI gate" job; `.github/workflows/auto-merge.yml`
+  turns on auto-merge for ready pull requests. Kvant fast-forwards `main`
+  to Gitea, where pull requests and issues are turned off, so
+  `.gitea/workflows/` runs only on `main` (the ISO also on demand): the
+  package build and publishing, the pinned AUR rebuilds, the ISO and the
+  VM install test. Their
   `pull_request` triggers no longer fire, so a pull request that changes
   the image or `packaging/aur/` merges without an ISO, VM or AUR build;
   those run on the next `main`. Issue and pull request numbers written

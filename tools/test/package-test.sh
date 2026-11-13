@@ -71,13 +71,18 @@ for path in usr/bin/subcult-screensaver-render usr/share/subcult/screensaver/ind
   grep -qx "$path" <<<"$list" || fail "missing $path"
 done
 
-# Look layer (shell and look design): GTK, kitty and Neovim defaults.
+# Look layer (shell and look design): GTK, KDE, Chromium, kitty and Neovim defaults.
 for path in usr/share/glib-2.0/schemas/90-subarchy.gschema.override etc/xdg/gtk-3.0/settings.ini \
-  etc/xdg/gtk-4.0/settings.ini etc/xdg/kitty/kitty.conf etc/xdg/kitty/subcult-ink.conf \
+  etc/xdg/gtk-4.0/settings.ini etc/xdg/kdeglobals usr/share/color-schemes/Pult.colors \
+  etc/chromium/policies/managed/color.json \
+  etc/xdg/kitty/kitty.conf etc/xdg/kitty/subcult-ink.conf \
   usr/share/nvim/site/colors/subcult-ink.lua usr/share/nvim/site/plugin/subarchy-colors.lua; do
   mode=$(bsdtar -tvf "$pkg" "$path" 2>/dev/null | cut -c1-10) || true
   [[ $mode == -rw-r--r-- ]] || fail "missing $path or mode ${mode:-none}, want 0644"
 done
+# The GTK settings above name adw-gtk3-dark; without it GTK 3 falls back to
+# light Adwaita, so the package must pull it in on upgrades too.
+bsdtar -xOf "$pkg" .PKGINFO | grep -qx 'depend = adw-gtk-theme' || fail "does not depend on adw-gtk-theme"
 for path in usr/share/icons/subcult-cursor/index.theme usr/share/icons/subcult-cursor/cursors/left_ptr \
   usr/share/icons/subcult-cursor/hyprcursors/default.hlc usr/share/icons/subcult-cursor/manifest.hl; do
   grep -qx "$path" <<<"$list" || fail "missing $path"
@@ -95,6 +100,7 @@ for path in etc/xdg/nvim/sysinit.vim usr/share/icons/default/index.theme; do
 done
 for path in usr/share/subcult/shell/shell.qml usr/share/subcult/shell/Bar.qml usr/share/subcult/shell/Commons/qmldir \
   usr/share/subcult/shell/widgets/index.json usr/lib/systemd/user/subcult-shell.service \
+  usr/share/subcult/shell/widgets/ht3/Panel.qml usr/share/subcult/shell/services/Ht3.qml usr/bin/subcult-ht3 \
   usr/lib/systemd/user/graphical-session.target.wants/subcult-shell.service; do
   grep -qx "$path" <<<"$list" || fail "missing $path"
 done

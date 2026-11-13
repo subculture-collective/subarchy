@@ -1,0 +1,9 @@
+#%PAM-1.0
+# Subarchy's lock screen, fingerprint (#93, ADR 0023). The lock runs this
+# beside its password stack (subcult-lock), never in its place, and only
+# when fprintd reports a finger enrolled for the user. Without fprintd or a
+# reader the module fails and the password still unlocks. pam_fprintd's
+# defaults hold: three touches or 30 seconds per check, then the lock
+# starts another.
+auth     required  pam_fprintd.so
+account  include   system-auth

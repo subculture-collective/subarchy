@@ -4,6 +4,7 @@ import QtQuick.Window
 import QtMultimedia
 import Quickshell
 import "LockModel.js" as Model
+import "FingerprintModel.js" as Fingerprint
 
 // One output's lock surface: the lockup and the clock in the middle, the
 // prompt under them once a key was pressed. Keys go to the program through
@@ -12,6 +13,9 @@ FocusScope {
   id: view
 
   property var lockState: Model.initial()
+  // The fingerprint check's mode (FingerprintModel.js); "off" shows nothing.
+  property string fingerprint: "off"
+  readonly property string fingerprintHint: Fingerprint.hint(fingerprint)
   // The shell's colour tokens (base, text, subtext, muted, surface, border, error).
   property var theme: ({})
 
@@ -238,10 +242,27 @@ FocusScope {
         font.pixelSize: 14
       }
 
+      // The fingerprint line, in the same place when the password check has
+      // nothing to say.
+      Text {
+        objectName: "lockFingerprint"
+        anchors.top: field.bottom
+        anchors.topMargin: 8
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: view.lockState.prompt && view.lockState.message === "" && view.fingerprintHint !== ""
+        text: view.fingerprintHint
+        width: Math.min(implicitWidth, view.width - 48)
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        color: view.fingerprint === "nomatch" ? (view.theme.error || "#D52032") : (view.theme.muted || "#5E5570")
+        font.family: "sans-serif"
+        font.pixelSize: 14
+      }
+
       Text {
         anchors.centerIn: parent
         visible: !view.lockState.prompt
-        text: "Press a key to unlock"
+        text: Fingerprint.idleText(view.fingerprint)
         color: view.theme.muted || "#5E5570"
         font.family: "sans-serif"
         font.pixelSize: 14

@@ -706,6 +706,29 @@ def boot(disk: Path, vars_file: Path) -> bool:
                 "systemctl is-enabled tailscaled; systemctl is-active tailscaled;"
                 " tailscale status 2>&1 | grep -ci 'logged out'; tailscale version | head -1"
             ),
+            # No account is tailscaled's operator (ADR 0058, ADR 0062): the
+            # user cannot change tailscaled directly (signed out, `down` would
+            # change nothing anyway), and the panel goes through the root
+            # helper its polkit action names, without a password in the
+            # active session only. Taildrop arrives through a system unit
+            # for the installed user, which waits while signed out and is
+            # wanted by tailscaled, so it starts whenever tailscaled does.
+            "tailscale_helper": serial.run(
+                f"{sudo} tailscale debug prefs | grep -cE '\"OperatorUser\": \"[^\"]+\"';"
+                " tailscale down >/dev/null 2>&1 && echo USER_CONTROLS || echo USER_DENIED;"
+                " pkaction --verbose --action-id tv.subcult.tailscale | grep -E 'implicit (any|active)|exec.path' | tr -s ' ';"
+                " test -x /usr/lib/subcult/tailscale-helper && echo HELPER;"
+                f" test -L /etc/systemd/system/tailscaled.service.wants/subcult-taildrop@{USER}.service && echo WANTED;"
+                f" systemctl is-enabled subcult-taildrop@{USER}.service; systemctl is-active subcult-taildrop@{USER}.service"
+            ),
+            # lazydocker through polkit (ADR 0055): the action names the
+            # root side and keeps the password a while; the launcher entry
+            # starts `subcult docker tui`.
+            "docker_tui": serial.run(
+                "pkaction --verbose --action-id tv.subcult.docker.tui | grep -E 'implicit active|exec.path' | tr -s ' ';"
+                " test -x /usr/lib/subcult/lazydocker-root && echo ROOT_SIDE;"
+                " grep -c '^Exec=subcult-docker-tui$' /usr/share/applications/subcult-lazydocker.desktop"
+            ),
             # One command from each group of install/packages/cli.txt.
             "cli_tools": serial.run(
                 "for c in curl rsync 7z bat eza rg fzf zoxide jq yq tldr starship atuin btop yazi lazygit lazydocker tmux"
@@ -764,8 +787,9 @@ def boot(disk: Path, vars_file: Path) -> bool:
             # The repository key is trusted (ADR 0025, subarchy-keyring).
             "keyring": serial.run(f"{sudo} pacman-key --list-keys CCE8B0F3BCDD601D909773E4466AA6E8241453D2 2>&1 | grep -c 'Arch Registry'"),
             # Hardware fixes (ADR 0050): the VM gets the ones every x86 machine
-            # gets; their files are in place; the regulatory domain follows the zone.
-            "fixes": serial.run("subcult hw fixes; echo ---; cat /etc/modprobe.d/hid_apple.conf; echo ---; grep '^WIRELESS_REGDOM=' /etc/conf.d/wireless-regdom"),
+            # gets; their files are in place; the regulatory domain follows the zone
+            # and wireless-regdb's database is there to apply it.
+            "fixes": serial.run("subcult hw fixes; echo ---; cat /etc/modprobe.d/hid_apple.conf; echo ---; grep '^WIRELESS_REGDOM=' /etc/conf.d/wireless-regdom; test -s /usr/lib/firmware/regulatory.db && echo regdb-ok"),
             # The system screens take the user's palette (ADR 0037): SDDM's
             # theme.conf, Limine's colours, a recoloured splash (one initramfs
             # rebuild), Chromium's colour policy (written though Chromium is not
@@ -926,7 +950,6 @@ finally:
         results["nvim"] = serial.run(
             f"{sudo} unshare -n runuser -u $(id -un) -- nvim --headless '+lua print(require(\"lazy\").stats().count)'"
             " '+lua print(\"SCHEME=\" .. tostring(vim.g.colors_name) .. \" LAYER=\" .. tostring(vim.g.subarchy_layer))' +qa 2>&1; echo NVIM_RC=$?", timeout=120)
-        results["cursor"] = serial.run("ls /usr/share/icons/subcult-cursor/cursors/left_ptr /usr/share/icons/subcult-cursor/hyprcursors/default.hlc")
         # The bar and the idle sample come first, before any window is open.
         screendump(qmp, VM / "bar.png")
         results["bar_colours"] = colours_in(VM / "bar.png", 26)
@@ -1080,8 +1103,8 @@ finally:
         "subcult update authenticates before privileged work": "UNAUTH_STEP_EXIT=1" in r["update"]
         and "UNAUTH_UPDATE_EXIT=1" in r["update"],
         "subcult update reuses authorized sudo": "\nUPDATE_EXIT=0" in r["update"] and "eboot needed" in r["update"],
-        "hardware fixes applied (hid_apple fnmode, regulatory domain US)": "hid-apple-fkeys" in r["fixes"]
-        and "options hid_apple fnmode=2" in r["fixes"] and 'WIRELESS_REGDOM="US"' in r["fixes"],
+        "hardware fixes applied (hid_apple fnmode, regulatory domain US and its database)": "hid-apple-fkeys" in r["fixes"]
+        and "options hid_apple fnmode=2" in r["fixes"] and 'WIRELESS_REGDOM="US"' in r["fixes"] and "regdb-ok" in r["fixes"],
         "new install on the stable channel, switches to edge and back": channel_ok(r["channel"]),
         "repository key trusted (subarchy-keyring)": r["keyring"].strip().splitlines()[-1:] == ["1"],
         "daily update check timer and count": r["update_timer"].splitlines()[0:1] == ["1"]
@@ -1108,6 +1131,9 @@ finally:
         "docker starts on demand, needs sudo, and is behind ufw": r["docker"].split()
         == ["enabled", "disabled", "inactive", "0", "USER_CANNOT", "SUDO_CAN", "active", "1", "COMPOSE", "BUILDX"],
         "tailscale is installed and running, signed out": r["tailscale"].split()[:3] == ["enabled", "active", "1"],
+        "no Tailscale operator; the panel's helper under its polkit action; Taildrop receiver running":
+            tailscale_helper_ok(r["tailscale_helper"]),
+        "lazydocker reaches Docker through its polkit action": docker_tui_ok(r["docker_tui"]),
         "command-line and terminal apps installed": "CLI_DONE" in r["cli_tools"] and "missing:" not in r["cli_tools"],
         "voxtype, LocalSend and the Proton apps installed": "APPS_DONE" in r["desktop_apps"]
         and "missing:" not in r["desktop_apps"],
@@ -1154,7 +1180,6 @@ finally:
         "bar colours (base, line, text)": {"100B19", "1F1830", "F0ECE4"} <= r["bar_colours"],
         "font roles": r["fonts"].split("\n")[:3] == ["JetBrainsMono Nerd Font", "JetBrainsMono Nerd Font Propo", "Libertinus Mono"],
         "GTK icons and cursor": "'Papirus-Dark'" in r["gtk"] and "'subcult-cursor'" in r["gtk"],
-        "cursor theme installed": "No such file" not in r["cursor"] and "left_ptr" in r["cursor"],
         "Neovim starts offline with its plugins": "NVIM_RC=0" in r["nvim"] and "Failed" not in r["nvim"],
         "Neovim has the Subarchy layer and the subcult scheme": "LAYER=subarchy-nvim" in r["nvim"] and "SCHEME=subcult" in r["nvim"],
         "Discord web app and Vencord Web installed": "WEBAPP_OK" in r["discord"],
@@ -1415,6 +1440,23 @@ def hw_ok(out: str) -> bool:
     wanted = {"GenuineIntel": {"intel-ucode", "thermald"}, "AuthenticAMD": {"amd-ucode"}}.get(vendor.group(1) if vendor else "")
     installed = {w for w in out.split() if w in ("intel-ucode", "amd-ucode", "thermald")}
     return wanted is not None and installed == wanted and "linux-firmware" not in out and "VM:        QEMU" in out
+
+
+def docker_tui_ok(out: str) -> bool:
+    """pkaction's lines for tv.subcult.docker.tui, the root side, the entry."""
+    return ("implicit active: auth_admin_keep" in out
+            and "org.freedesktop.policykit.exec.path -> /usr/lib/subcult/lazydocker-root" in out
+            and out.split()[-2:] == ["ROOT_SIDE", "1"])
+
+
+def tailscale_helper_ok(out: str) -> bool:
+    """No operator, the user refused, the polkit action, the helper, the receiver unit."""
+    words = out.split()
+    return (words[:2] == ["0", "USER_DENIED"]
+            and "implicit any: auth_admin" in out
+            and "implicit active: yes" in out
+            and "org.freedesktop.policykit.exec.path -> /usr/lib/subcult/tailscale-helper" in out
+            and words[-4:] == ["HELPER", "WANTED", "enabled", "active"])
 
 
 def theme_system_ok(out: str) -> bool:

@@ -120,5 +120,13 @@ delays stable updates rather than breaking them.
   rule is gone. The stable snapshot advances weekly through
   `tools/ci/advance-snapshot.sh`, after the ISO build and VM install test
   pass against the new date ([[package-publishing]]).
+- 2026-11-13: only the snapshot and package steps stop `subcult update`.
+  A failed DKMS query is a warning. After a failed migration the reload,
+  restarts and indicator refresh still run and the report is printed,
+  since the packages are already replaced; the command then exits 1. An
+  interrupt during the DKMS check or the migrations stops the run there.
+  fwupd's "nothing to do" (exit 2) is not reported as a failure, and
+  `--yes` passes fwupd `--assume-yes --no-reboot-check`; the report then
+  says that staged firmware updates apply at the next reboot.
 
 Related: [[decision-map|Decision map]] · [[0025-package-repository|ADR 0025]] · [[0011-snapshots|ADR 0011]]

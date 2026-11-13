@@ -202,6 +202,15 @@ PanelBase {
             width: group.width
             height: 30
 
+            // Apply and Undo empty the pending values: clear what was typed.
+            Connections {
+              target: panel
+              function onPendingChanged() {
+                if (Object.keys(panel.pending).length === 0)
+                  field.text = ""
+              }
+            }
+
             Text {
               id: label
               anchors.left: parent.left
@@ -244,10 +253,10 @@ PanelBase {
                   color: Theme.muted
                   font: field.font
                 }
-                // A choice cycles with a click on the empty field.
+                // A choice cycles on every click and takes no typed input.
                 MouseArea {
                   anchors.fill: parent
-                  enabled: row.modelData.kind === "choice" && field.text === ""
+                  enabled: row.modelData.kind === "choice"
                   onClicked: {
                     const cs = row.modelData.choices || []
                     const now = String(row.changed ? panel.pending[row.modelData.id] : panel.current[row.modelData.id])

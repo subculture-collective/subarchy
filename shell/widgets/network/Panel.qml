@@ -39,6 +39,7 @@ PanelBase {
     } else if (Model.needsPassword(n)) {
       panel.asking = n
       password.text = ""
+      prompt.tooShort = false
       password.forceActiveFocus()
     }
   }
@@ -145,7 +146,10 @@ PanelBase {
     }
 
     // The password for a new secured network; Enter joins, Escape cancels.
+    // WPA needs at least 8 characters: a shorter one keeps the prompt open.
     Rectangle {
+      id: prompt
+      property bool tooShort: false
       visible: panel.asking !== null
       width: parent.width
       height: visible ? 60 : 0
@@ -158,9 +162,9 @@ PanelBase {
         width: parent.width - 16
         spacing: 4
         Text {
-          text: panel.asking ? "Password for " + panel.asking.name : ""
+          text: prompt.tooShort ? "At least 8 characters" : panel.asking ? "Password for " + panel.asking.name : ""
           textFormat: Text.PlainText
-          color: Theme.subtext
+          color: prompt.tooShort ? Theme.warning : Theme.subtext
           font.family: Style.uiFontFamily
           font.pixelSize: Style.fontSize - 1
         }
@@ -173,13 +177,19 @@ PanelBase {
           selectionColor: Theme.selection
           font.family: Style.uiFontFamily
           font.pixelSize: Style.fontSize
+          onTextEdited: prompt.tooShort = false
           onAccepted: {
-            if (panel.asking && text.length >= 8)
+            if (panel.asking && text.length < 8) {
+              prompt.tooShort = true
+              return
+            }
+            if (panel.asking)
               panel.asking.connectWithPsk(text) // qmllint disable missing-property
             panel.asking = null
             text = ""
           }
           Keys.onEscapePressed: {
+            prompt.tooShort = false
             panel.asking = null
             text = ""
           }

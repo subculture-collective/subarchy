@@ -8,6 +8,14 @@ function order(clients, history) {
   return recent.concat(open.filter(a => recent.indexOf(a) < 0))
 }
 
+// Hyprland's own focus order for a client (`hyprctl clients -j`, 0 is the
+// focused window), so windows focused before the shell started still sort
+// by recency. A client without one sorts last.
+function focusRank(o) {
+  const v = o && o.focusHistoryID
+  return typeof v === "number" && v >= 0 ? v : 1e9
+}
+
 // Put the newly focused window first, keep at most cap entries.
 function remember(history, address, cap) {
   if (!address)

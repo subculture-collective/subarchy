@@ -28,6 +28,12 @@ PanelBase {
   }
 
   Component.onCompleted: check()
+  // A server typed in the field is checked at once, as the bar widget does.
+  onServerChanged: {
+    panel.report = null
+    panel.error = 0
+    panel.check()
+  }
 
   Process {
     id: query
@@ -86,7 +92,7 @@ PanelBase {
     Text {
       visible: panel.server === "" || panel.error === 3 || panel.error === 5
       width: parent.width
-      text: (panel.server === "" ? "Set the server above. " : panel.error === 5 ? "The server refused the key. " : "") + "The API key lives in the keyring: run\n" + Model.storeHint()
+      text: (panel.server === "" ? "Set the server above. " : panel.error === 5 ? "The server answered with an error (check the key and the URL). " : "") + "The API key lives in the keyring: run\n" + Model.storeHint()
       textFormat: Text.PlainText
       wrapMode: Text.Wrap
       color: Theme.subtext

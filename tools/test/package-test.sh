@@ -134,7 +134,7 @@ for unit in "$work/root"/usr/lib/systemd/user/graphical-session.target.wants/*; 
 done
 [[ -x $work/root/usr/lib/subcult/bluetooth-pair-agent ]] || fail "pairing helper is missing or not executable"
 # Tailscale (ADR 0058) and lazydocker through polkit (ADR 0055).
-for f in usr/lib/subcult/file-chooser usr/lib/subcult/lazydocker-root usr/bin/subcult-tailscale-send \
+for f in usr/lib/subcult/file-chooser usr/lib/subcult/lazydocker-root usr/lib/subcult/tailscale-operator usr/bin/subcult-tailscale-send \
   usr/bin/subcult-tailscale-receive usr/bin/subcult-docker-tui; do
   [[ -x $work/root/$f ]] || fail "$f is missing or not executable"
 done

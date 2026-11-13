@@ -46,6 +46,29 @@ list to the agent (2026-11-07); the list above is that starting list.
   group; the action names `/usr/lib/subcult/lazydocker-root`, which takes
   only the terminal type. `auth_admin_keep`, not password-free: driving
   Docker is root access.
+- Tailscale operator (2026-11-13, [[0058-tailscale|ADR 0058]]): the
+  installed user is tailscaled's operator, set at first boot by
+  `subcult-tailscale-operator@<user>.service` and on older installs by a
+  migration (one sudo prompt during `subcult update`). A user added later
+  gets an "Allow this account" button in the bar's Tailscale panel, which
+  runs `pkexec tailscale set --operator=$USER` under polkit's generic
+  `org.freedesktop.policykit.exec` action (an administrator's password).
+  The panel needs this for on/off, sign-in and the exit node, and the
+  Taildrop receiver for `tailscale file get`. **It grants more than that.**
+  The operator can change every tailscaled setting without a password,
+  including turning on Tailscale SSH (`tailscale set --ssh`), advertising
+  routes or an exit node, and `tailscale serve`; checked with tailscale
+  1.104.7 in a container. Tailscale SSH runs as root and admits whoever
+  the tailnet's SSH policy allows. Tailscale's default policy lets the
+  owner's own devices in as root after a browser check, so any program
+  running as the user can reach root that way without the local password.
+  Tailscale 1.104 has no system policy that turns Tailscale SSH off
+  (`/etc/tailscale/syspolicy.json` rejects such a key). tailscaled has one
+  operator: allowing a second account takes the role from the first; the
+  boot unit and the migration leave another account's role in place. The
+  narrower alternative, not built: a root helper under a polkit action that
+  runs only `tailscale up`, `down` and `set --exit-node=<address>`, plus a
+  system-side Taildrop receiver. **Owner decision pending** (PR #157).
 
 ## Borrowed from Omarchy
 

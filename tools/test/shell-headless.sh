@@ -896,26 +896,30 @@ st=$(status "$home1")
 [[ $(json '"subcult.tailscale" in d["shown"]["HEADLESS-1"]') == True ]] || fail "tailscale did not load: $st"
 [[ $(json 'd["intervals"].get("subcult.tailscale.refresh", {}).get("interval")') == 60000 ]] || fail "tailscale timer not reported: $st"
 ts() { HOME=$home1 quickshell ipc -p "$shell" call subcult.tailscale "$@"; }
+# On failure: the state and every call the tailscale stand-in saw.
+tsfail() { fail "$1: state $(ts state 2>&1); tailscale calls: $(tr '\n' ';' <"$home1/tailscale-log" 2>/dev/null)"; }
 for _ in $(seq 20); do [[ $(ts state) == *'"state":"NeedsLogin"'* ]] && break; sleep 0.5; done
-[[ $(ts state) == *'"state":"NeedsLogin"'* ]] || fail "tailscale signed out not reported: $(ts state)"
+[[ $(ts state) == *'"state":"NeedsLogin"'* ]] || tsfail "tailscale signed out not reported"
 HOME=$home1 quickshell ipc -p "$shell" call subcult.shell panel subcult.tailscale >/dev/null
 sleep 1
 st=$(status "$home1")
 [[ $(json 'd.get("panel")') == subcult.tailscale ]] || fail "the tailscale panel did not open: $st"
 ts signIn >/dev/null
 for _ in $(seq 20); do [[ $(ts state) == *'"loginUrl":"https://login.tailscale.com/a/headless"'* ]] && break; sleep 0.5; done
-[[ $(ts state) == *'"loginUrl":"https://login.tailscale.com/a/headless"'* ]] || fail "no sign-in link from tailscale up: $(ts state)"
+[[ $(ts state) == *'"loginUrl":"https://login.tailscale.com/a/headless"'* ]] || tsfail "no sign-in link from tailscale up"
 ts cancelSignIn >/dev/null
 HOME=$home1 quickshell ipc -p "$shell" call subcult.shell panel close >/dev/null
 touch "$home1/tailscale-up"
+# The cancelled sign-in's own read may still be running; this one queues
+# behind it.
 ts refresh >/dev/null
 for _ in $(seq 20); do [[ $(ts state) == *'"state":"Running"'* ]] && break; sleep 0.5; done
 [[ $(ts state) == *'"self":{"name":"headless","dnsName":"headless.tail1.ts.net","ip":"100.64.0.1","ipv6":""},"peers":1'* ]] ||
-  fail "tailscale signed in: $(ts state)"
+  tsfail "tailscale signed in"
 # The kick is a detached process; give it a moment.
 for _ in $(seq 10); do [[ -s $home1/taildrop-kicks ]] && break; sleep 0.5; done
-[[ $(cat "$home1/taildrop-kicks" 2>/dev/null) == kick ]] || fail "the Taildrop receiver was not told on sign-in: $(cat "$home1/taildrop-kicks" 2>/dev/null)"
-grep -qx 'up' "$home1/tailscale-log" || fail "sign-in did not run tailscale up: $(cat "$home1/tailscale-log")"
+[[ $(cat "$home1/taildrop-kicks" 2>/dev/null) == kick ]] || tsfail "the Taildrop receiver was not told on sign-in (kicks: $(cat "$home1/taildrop-kicks" 2>/dev/null))"
+grep -qx 'up' "$home1/tailscale-log" || tsfail "sign-in did not run tailscale up"
 # Weather: in the default layout; nothing is fetched until a location is
 # set (no Open-Meteo call in the curl log); the panel's search runs
 # linecast; a location set in the config fetches the conditions (stub curl)

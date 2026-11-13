@@ -170,7 +170,7 @@ PanelBase {
     // A user added after the install is not tailscaled's operator yet.
     Note {
       visible: Tailscale.needsOperator
-      text: "Tailscale does not let this account control it yet. Allowing it asks for an administrator's password once."
+      text: "Tailscale does not let this account control it yet. Allowing it asks for an administrator's password once. Only one account can control Tailscale: if another account does, it loses that."
     }
     ActionButton {
       objectName: "operator"
@@ -241,7 +241,7 @@ PanelBase {
             visible: row.modelData.exitNodeOption
             glyph: Glyphs.tailscale(true)
             color: row.modelData.exitNode ? Theme.accent : Theme.muted
-            tooltip: row.modelData.exitNode ? "Stop using it as the exit node" : "Use as exit node"
+            tooltip: row.modelData.exitNode ? "Stop using it as the exit node" : "Use as exit node (the local network stays reachable)"
             onClicked: Tailscale.setExitNode(row.modelData.exitNode ? null : row.modelData)
           }
           IconButton {

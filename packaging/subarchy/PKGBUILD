@@ -75,9 +75,11 @@ package() {
   done
   install -Dm755 "$root/tools/bluetooth/pair-agent.py" "$pkgdir/usr/lib/subcult/bluetooth-pair-agent"
   # The desktop portal's file picker for scripts (subcult tailscale send),
-  # and the root side of `subcult docker tui` that its polkit action names.
+  # the root side of `subcult docker tui` that its polkit action names, and
+  # what subcult-tailscale-operator@.service runs.
   install -Dm755 "$root/tools/portal/file-chooser.py" "$pkgdir/usr/lib/subcult/file-chooser"
   install -Dm755 "$root/tools/docker/lazydocker-root.sh" "$pkgdir/usr/lib/subcult/lazydocker-root"
+  install -Dm755 "$root/tools/tailscale/operator.sh" "$pkgdir/usr/lib/subcult/tailscale-operator"
 
   # OS identity (ADR 0052). /etc/os-release takes precedence over the
   # filesystem package's /usr/lib/os-release.

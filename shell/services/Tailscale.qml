@@ -25,8 +25,12 @@ Singleton {
   readonly property bool signingIn: login.running
   readonly property bool busy: action.running || login.running
 
+  // A refresh asked for while a read is under way runs after it: that read
+  // may have started before the change the caller wants to see.
   function refresh() {
-    if (!query.running)
+    if (query.running)
+      query.again = true
+    else
       query.running = true
   }
 
@@ -48,6 +52,7 @@ Singleton {
     root.needsOperator = false
     root.loginUrl = ""
     login.cancelled = false
+    login.errText = ""
     login.running = true
   }
 
@@ -65,7 +70,8 @@ Singleton {
   }
 
   // For a user added after the install: an administrator's password through
-  // polkit, once.
+  // polkit, once. tailscaled has one operator, so this takes the role from
+  // any other account that has it.
   function becomeOperator() {
     root.run(["pkexec", "tailscale", "set", "--operator=" + Quickshell.env("USER")])
   }
@@ -78,7 +84,7 @@ Singleton {
   // The file picker and the transfer belong to `subcult tailscale send`,
   // which reports the result as a notification.
   function send(peer) {
-    Quickshell.execDetached(["subcult-tailscale-send", Model.sendTarget(peer)])
+    Quickshell.execDetached(Model.sendCommand(peer))
   }
 
   function openLogin() {
@@ -88,7 +94,11 @@ Singleton {
 
   onStatusChanged: {
     const running = root.status !== null && root.status.running
-    // Signed in: the Taildrop receiver stops waiting and fetches now.
+    // Signed in: the Taildrop receiver stops waiting and fetches now. The
+    // shell's first read counts too: the receiver may have gone to sleep
+    // while tailscaled was still connecting at login. A restart during a
+    // copy loses nothing; the receiver drops the half-copied file and
+    // tailscaled hands it over again.
     if (running && !query.wasRunning)
       Quickshell.execDetached(["systemctl", "--user", "try-restart", "subcult-tailscale-receive.service"])
     query.wasRunning = running
@@ -99,6 +109,7 @@ Singleton {
   Process {
     id: query
     property bool wasRunning: false
+    property bool again: false
     // Exit 127 without the command, so a missing package hides the widget.
     command: ["sh", "-c", "command -v tailscale >/dev/null || exit 127; exec tailscale status --json"]
     stdout: StdioCollector {
@@ -112,6 +123,10 @@ Singleton {
       const s = Model.parse(queryOut.text)
       root.daemonDown = s === null && Model.daemonDown(queryErr.text)
       root.status = s
+      if (query.again) {
+        query.again = false
+        Qt.callLater(root.refresh)
+      }
     }
   }
 
@@ -121,7 +136,7 @@ Singleton {
       id: actionErr
     }
     onExited: (code) => {
-      root.needsOperator = code !== 0 && Model.accessDenied(actionErr.text)
+      root.needsOperator = code !== 0 && Model.needsOperator(actionErr.text)
       root.error = code === 0 || root.needsOperator ? "" : Model.errorText(actionErr.text)
       root.refresh()
     }
@@ -130,6 +145,8 @@ Singleton {
   Process {
     id: login
     property bool cancelled: false
+    // What `tailscale up` printed besides the link, for the error.
+    property string errText: ""
     command: ["tailscale", "up"]
     stderr: SplitParser {
       onRead: (line) => {
@@ -138,13 +155,14 @@ Singleton {
           root.loginUrl = url
           root.openLogin()
         }
-        if (Model.accessDenied(line))
+        if (Model.needsOperator(line))
           root.needsOperator = true
+        login.errText += line + "\n"
       }
     }
     onExited: (code) => {
       if (code !== 0 && !login.cancelled && !root.needsOperator && root.loginUrl === "")
-        root.error = "tailscale up failed (exit " + code + ")"
+        root.error = Model.errorText(login.errText) || "tailscale up failed (exit " + code + ")"
       root.loginUrl = ""
       root.refresh()
     }

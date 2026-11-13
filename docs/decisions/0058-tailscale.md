@@ -72,13 +72,31 @@ pause during captive portal sign-in.
   `tailscale logout`, but `tailscale login` run by the operator starts a
   new profile and drops it, so the panel signs in with plain `tailscale up`,
   which keeps it.
+- 2026-11-13, after review: the operator can change every tailscaled
+  setting without a password, Tailscale SSH (a root SSH server) included,
+  which is a way to root that skips the local password. This ADR did not
+  decide that; [[0062-privilege-policy|ADR 0062]] now lists the grant, what
+  it allows and the narrower alternative, pending the owner's decision.
+  tailscaled has one operator: "Allow this account" takes the role from any
+  other account (the panel says so), while the boot unit and the migration
+  leave another account's role in place. Signed out, `tailscale up` by a
+  user who is not the operator may fail with a demand to repeat
+  `--operator=<the operator>` instead of "Access denied"; the panel treats
+  both as "not the operator". An exit node picked in the panel keeps the
+  local network reachable (`--exit-node-allow-lan-access=true`), and the
+  panel addresses a machine by its Tailscale address for the exit node and
+  for Taildrop.
 - 2026-11-13: Taildrop receive. `subcult-tailscale-receive.service` (user,
   every session) runs `subcult tailscale receive`: `tailscale file get
   --wait` into a staging folder under `~/Downloads`, then each file moves to
   a free name and is announced. Signed out, tailscaled answers `file get`
   with "no storage directory" at once, so the receiver tries again every
   five minutes and the panel restarts it when it sees the sign-in. "Runs
-  only while signed in" became "sleeps while signed out".
+  only while signed in" became "sleeps while signed out". `file get` writes
+  each file under its final name, so each get uses its own folder, which
+  is delivered only after the get succeeds; a folder from a get that was
+  cut off is thrown away at the next start, and tailscaled hands its files
+  over again.
 - Still open: the exit-node pause during captive portal sign-in
   ([[0020-dns|ADR 0020]]) and whether ufw needs a `tailscale0` rule.
 

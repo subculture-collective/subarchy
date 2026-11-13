@@ -109,9 +109,12 @@ function loginUrl(line) {
   return m ? m[0] : ""
 }
 
-// tailscaled refused the user: they are not its operator.
-function accessDenied(text) {
-  return /Access denied/i.test(String(text || ""))
+// tailscaled refused the user: they are not its operator. Signed out,
+// `tailscale up` run by someone other than the operator can instead fail
+// with "requires mentioning all non-default flags" and suggest
+// `tailscale up --operator=<the operator>`.
+function needsOperator(text) {
+  return /Access denied|--operator=/i.test(String(text || ""))
 }
 
 // No tailscaled to talk to.
@@ -119,19 +122,32 @@ function daemonDown(text) {
   return /failed to connect to local tailscaled|is tailscaled running|tailscaled\.sock/i.test(String(text || ""))
 }
 
-// The last meaningful line of an error, short enough for the panel.
+// The first meaningful line of an error, short enough for the panel. The
+// sign-in prompt and the sudo hints are not the error.
 function errorText(text) {
-  const lines = String(text || "").split("\n").map(l => l.trim()).filter(l => l !== "" && !/^Use 'sudo /.test(l) && !/^To not require root/.test(l))
+  const lines = String(text || "").split("\n").map(l => l.trim()).filter(l => l !== "" && !/^Use 'sudo /.test(l)
+    && !/^To not require root/.test(l) && !/^To authenticate, visit:/.test(l) && !/^https:\/\//.test(l))
   const l = lines.length > 0 ? lines[0] : ""
   return l.length > 140 ? l.slice(0, 139) + "…" : l
 }
 
-// The argv that makes a peer the exit node, or clears it (peer null).
-function exitNodeCommand(p) {
-  return ["tailscale", "set", "--exit-node=" + (p ? p.ip : "")]
+// How to reach a peer: its IPv4 address, else its IPv6 address, else its
+// MagicDNS name. tailscale matches an address whatever the peer is called.
+function address(p) {
+  return p.ip || p.ipv6 || p.dnsName
 }
 
-// What `subcult tailscale send` is given to address a peer.
-function sendTarget(p) {
-  return p.name !== "" ? p.name : p.ip
+// The argv that makes a peer the exit node, or clears it (peer null). The
+// local network (router, printers, machines at home) stays reachable while
+// other traffic goes through the exit node.
+function exitNodeCommand(p) {
+  if (!p)
+    return ["tailscale", "set", "--exit-node="]
+  return ["tailscale", "set", "--exit-node=" + address(p), "--exit-node-allow-lan-access=true"]
+}
+
+// The argv that sends files to a peer: by address, named in the
+// notification.
+function sendCommand(p) {
+  return ["subcult-tailscale-send", "--name", p.name || address(p), address(p)]
 }

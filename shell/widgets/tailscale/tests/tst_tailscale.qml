@@ -82,19 +82,37 @@ TestCase {
   function test_commandOutput() {
     compare(Model.loginUrl("\thttps://login.tailscale.com/a/gd13d0bed525528e"), "https://login.tailscale.com/a/gd13d0bed525528e")
     compare(Model.loginUrl("To authenticate, visit:"), "")
-    verify(Model.accessDenied("Access denied: checkprefs access denied"))
-    verify(!Model.accessDenied("timeout waiting"))
+    verify(Model.needsOperator("Access denied: checkprefs access denied"))
+    verify(!Model.needsOperator("timeout waiting"))
     verify(Model.daemonDown("failed to connect to local tailscaled; it doesn't appear to be running"))
     compare(Model.errorText("Access denied: prefs write access denied\n\nUse 'sudo tailscale down'.\nTo not require root, use 'sudo tailscale set --operator=$USER' once.\n"),
       "Access denied: prefs write access denied")
     compare(Model.errorText(""), "")
+    compare(Model.errorText("\nTo authenticate, visit:\n\n\thttps://login.tailscale.com/a/abc\n\nbackend error: timed out\n"), "backend error: timed out")
+  }
+
+  // Signed out, `tailscale up` by someone other than the operator (seen
+  // with 1.104.7): not "Access denied" but a demand to repeat the
+  // operator's setting.
+  function test_upByAnotherAccount() {
+    const out = "Error: changing settings via 'tailscale up' requires mentioning all\n"
+      + "non-default flags. To proceed, either re-run your command with --reset or\n"
+      + "use the command below to explicitly mention the current value of\n"
+      + "all non-default settings:\n\n\ttailscale up --operator=alice\n"
+    verify(Model.needsOperator(out))
+    verify(Model.needsOperator("\ttailscale up --operator=alice"), "the line on its own, as the panel reads it")
+    verify(!Model.needsOperator("\ttailscale up --exit-node=100.64.0.2"), "another setting is not about the operator")
   }
 
   function test_commands() {
     const s = Model.parse(signedIn)
-    compare(Model.exitNodeCommand(s.peers[1]), ["tailscale", "set", "--exit-node=100.64.0.2"])
+    compare(Model.exitNodeCommand(s.peers[1]), ["tailscale", "set", "--exit-node=100.64.0.2", "--exit-node-allow-lan-access=true"])
     compare(Model.exitNodeCommand(null), ["tailscale", "set", "--exit-node="])
-    compare(Model.sendTarget(s.peers[0]), "almaz")
-    compare(Model.sendTarget({ name: "", ip: "100.64.0.9" }), "100.64.0.9")
+    compare(Model.exitNodeCommand({ ip: "", ipv6: "fd7a:115c:a1e0::9", dnsName: "v6only.tail1234.ts.net" }),
+      ["tailscale", "set", "--exit-node=fd7a:115c:a1e0::9", "--exit-node-allow-lan-access=true"], "no IPv4: the IPv6 address, never an empty one")
+    compare(Model.sendCommand(s.peers[0]), ["subcult-tailscale-send", "--name", "almaz", "100.64.0.4"])
+    compare(Model.sendCommand(s.peers[2]), ["subcult-tailscale-send", "--name", "Phone", "100.64.0.3"], "by address, whatever the peer is called")
+    compare(Model.sendCommand({ name: "", ip: "", ipv6: "", dnsName: "x.tail1234.ts.net" }),
+      ["subcult-tailscale-send", "--name", "x.tail1234.ts.net", "x.tail1234.ts.net"])
   }
 }

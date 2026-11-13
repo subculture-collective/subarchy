@@ -15,22 +15,23 @@ import (
 // The first service to name a zone wins; a failed or empty one does not
 // end the wait for the other.
 func TestLookupZone(t *testing.T) {
-	replies := map[string]string{
-		zoneServices[0].url: `{"error": true, "reason": "RateLimited"}`,
-		zoneServices[1].url: `{"success": true, "timezone": {"id": "America/Chicago", "utc": "-06:00"}}`,
-	}
-	get := func(_ context.Context, url string) ([]byte, error) {
-		if r, ok := replies[url]; ok {
-			return []byte(r), nil
+	// A lookup that has its answer leaves the slower request running until
+	// it is cancelled, so each lookup gets its own replies.
+	answering := func(first, second string) func(context.Context, string) ([]byte, error) {
+		replies := map[string]string{zoneServices[0].url: first, zoneServices[1].url: second}
+		return func(_ context.Context, url string) ([]byte, error) {
+			if r, ok := replies[url]; ok {
+				return []byte(r), nil
+			}
+			return nil, errors.New("not asked for")
 		}
-		return nil, errors.New("not asked for")
 	}
-	if got := lookupZone(get); got != "America/Chicago" {
+	got := lookupZone(answering(`{"error": true, "reason": "RateLimited"}`,
+		`{"success": true, "timezone": {"id": "America/Chicago", "utc": "-06:00"}}`))
+	if got != "America/Chicago" {
 		t.Errorf("lookupZone = %q", got)
 	}
-	replies[zoneServices[0].url] = `{"ip": "192.0.2.1", "timezone": "Europe/Berlin"}`
-	replies[zoneServices[1].url] = `not json`
-	if got := lookupZone(get); got != "Europe/Berlin" {
+	if got := lookupZone(answering(`{"ip": "192.0.2.1", "timezone": "Europe/Berlin"}`, `not json`)); got != "Europe/Berlin" {
 		t.Errorf("lookupZone = %q", got)
 	}
 	failing := func(context.Context, string) ([]byte, error) { return nil, errors.New("offline") }

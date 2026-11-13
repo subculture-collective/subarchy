@@ -16,6 +16,7 @@ permissions:
 
 concurrency:
   group: iso-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   GOMAXPROCS: "4"

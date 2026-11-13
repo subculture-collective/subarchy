@@ -9,6 +9,7 @@ permissions:
 
 concurrency:
   group: packages-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   GOMAXPROCS: "4"

@@ -19,8 +19,13 @@ pacman -T go >/dev/null 2>&1 || nodeps=(--nodeps)
   BUILDDIR="$work/build" PKGDEST="$work/out" SRCDEST="$work/src" \
     makepkg --force --cleanbuild --noconfirm "${nodeps[@]}" >"$work/makepkg.log" 2>&1
 ) || {
-  # A failed test is named far above the log's end: show those lines first.
-  grep -n -B2 -A25 -e '--- FAIL' -e '^panic:' "$work/makepkg.log" | head -120 >&2 || true
+  # A failed test, panic, vet error or [setup failed] package is named far
+  # above the log's end: show those lines first. When none matches, show
+  # everything check() printed except passing packages.
+  cause=$(grep -n -B2 -A25 -e '--- FAIL' -e '^panic:' -e '\[setup failed\]' -e '^# ' "$work/makepkg.log") ||
+    cause=$(sed -n '/Starting check()/,$p' "$work/makepkg.log" | grep -Ev '^(ok|\?) ' | tail -80) || true
+  head -120 <<<"$cause" >&2
+  # A failure in build() never reaches check(); its cause is at the end.
   tail -30 "$work/makepkg.log" >&2
   fail "makepkg failed"
 }
@@ -76,7 +81,8 @@ for path in usr/share/glib-2.0/schemas/90-subarchy.gschema.override etc/xdg/gtk-
   etc/xdg/gtk-4.0/settings.ini etc/xdg/kdeglobals usr/share/color-schemes/Pult.colors \
   etc/chromium/policies/managed/color.json \
   etc/xdg/kitty/kitty.conf etc/xdg/kitty/subcult-ink.conf \
-  usr/share/nvim/site/colors/subcult-ink.lua usr/share/nvim/site/plugin/subarchy-colors.lua; do
+  usr/share/nvim/site/colors/subcult-ink.lua usr/share/nvim/site/colors/subcult.lua \
+  usr/share/nvim/site/plugin/subarchy-colors.lua; do
   mode=$(bsdtar -tvf "$pkg" "$path" 2>/dev/null | cut -c1-10) || true
   [[ $mode == -rw-r--r-- ]] || fail "missing $path or mode ${mode:-none}, want 0644"
 done
@@ -133,13 +139,42 @@ for unit in "$work/root"/usr/lib/systemd/user/graphical-session.target.wants/*; 
   if grep -qx 'Type=oneshot' "$unit"; then fail "$(basename "$unit") holds back graphical-session.target"; fi
 done
 [[ -x $work/root/usr/lib/subcult/bluetooth-pair-agent ]] || fail "pairing helper is missing or not executable"
+# Tailscale (ADR 0058) and lazydocker through polkit (ADR 0055).
+for f in usr/lib/subcult/file-chooser usr/lib/subcult/lazydocker-root usr/lib/subcult/tailscale-helper \
+  usr/lib/subcult/taildrop-receive usr/bin/subcult-tailscale-send usr/bin/subcult-docker-tui; do
+  [[ -x $work/root/$f ]] || fail "$f is missing or not executable"
+done
+for f in usr/lib/systemd/system/subcult-taildrop@.service usr/share/applications/subcult-lazydocker.desktop; do
+  [[ -e $work/root/$f ]] || fail "missing $f"
+done
+grep -q '<annotate key="org.freedesktop.policykit.exec.path">/usr/lib/subcult/lazydocker-root</annotate>' \
+  "$work/root/usr/share/polkit-1/actions/tv.subcult.docker.policy" || fail "the lazydocker polkit action does not name its program"
+# The Tailscale panel's helper (ADR 0062): the action names it and lets the
+# active session use it without a password; the receiver runs it as root.
+ts_policy=$work/root/usr/share/polkit-1/actions/tv.subcult.tailscale.policy
+grep -q '<annotate key="org.freedesktop.policykit.exec.path">/usr/lib/subcult/tailscale-helper</annotate>' "$ts_policy" ||
+  fail "the Tailscale polkit action does not name its helper"
+{ grep -q '<allow_active>yes</allow_active>' "$ts_policy" && grep -q '<allow_any>auth_admin</allow_any>' "$ts_policy"; } ||
+  fail "the Tailscale polkit action's defaults"
+td_unit=$work/root/usr/lib/systemd/system/subcult-taildrop@.service
+grep -qx 'ExecStart=/usr/lib/subcult/taildrop-receive %I' "$td_unit" || fail "subcult-taildrop@.service does not run the receiver"
+# It starts whenever tailscaled does, and keeps only the rights to become the user.
+grep -qx 'WantedBy=tailscaled.service' "$td_unit" || fail "subcult-taildrop@.service is not wanted by tailscaled"
+grep -qx 'CapabilityBoundingSet=CAP_SETUID CAP_SETGID' "$td_unit" || fail "subcult-taildrop@.service keeps every capability"
+# No user unit receives Taildrop files any more, and nothing grants
+# tailscaled's operator role.
+[[ ! -e $work/root/usr/lib/systemd/user/subcult-tailscale-receive.service ]] || fail "the old user receiver is packaged"
+if grep -rlE -- '--operator(=|[[:space:]]|$)' "$work/root/usr/lib/subcult" "$work/root/usr/lib/systemd" "$work/root/usr/bin" \
+  "$work/root/usr/share/subcult/migrations" 2>/dev/null; then
+  fail "a packaged file sets tailscaled's operator"
+fi
 "$work/root/usr/bin/subcult" --version | grep -qx 'subcult 0.0.0' || fail "subcult --version"
 "$work/root/usr/bin/subcult-app" validate "$work/root/usr/share/subcult/default/apps.toml" >/dev/null ||
   fail "shipped app catalogue does not validate"
 
 "$root/tools/test/cursor-test.sh" "$work/root/usr/bin/subcult-cursor" || fail "cursor test"
 
-# Neovim: Subcult Ink when the user picked no scheme, the user's scheme otherwise.
+# Neovim: the subcult scheme (ADR 0045) when the user picked no scheme, the user's scheme otherwise.
 if command -v nvim >/dev/null; then
   nv="$work/nvim"
   mkdir -p "$nv/cfg/nvim" "$nv/home"
@@ -148,7 +183,7 @@ if command -v nvim >/dev/null; then
       XDG_STATE_HOME=$nv/home/state XDG_DATA_DIRS="$work/root/usr/share:/usr/share" \
       nvim --headless +'lua io.write(vim.g.colors_name or "none")' +qa 2>/dev/null
   }
-  [[ $(scheme) == subcult-ink ]] || fail "Neovim does not default to subcult-ink"
+  [[ $(scheme) == subcult ]] || fail "Neovim does not default to subcult"
   echo 'vim.cmd.colorscheme("habamax")' >"$nv/cfg/nvim/init.lua"
   [[ $(scheme) == habamax ]] || fail "Neovim overrides the user's colour scheme"
 fi

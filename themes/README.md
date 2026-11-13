@@ -1,3 +1,3 @@
 # themes
 
-An unused placeholder, kept so the layout mirrors Omarchy's (`/usr/share/omarchy/themes/`). The default theme, `subcult-minimal`, ships from [`default/theme/`](../default/README.md).
+Unused; kept to mirror Omarchy's tree. Subarchy's themes are in [default/theme/](../default/theme/), in Pult's format.

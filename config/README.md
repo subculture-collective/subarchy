@@ -1,3 +1,3 @@
 # config
 
-An unused placeholder, kept so the layout mirrors Omarchy's (`/usr/share/omarchy/config/`). Subarchy's defaults live in [`default/`](../default/README.md), which the installer and the package read.
+Unused; kept to mirror Omarchy's tree (`/usr/share/omarchy/config/`). The user's Hyprland config comes from [default/hypr/user-hyprland.lua](../default/hypr/user-hyprland.lua).

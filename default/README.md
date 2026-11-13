@@ -16,26 +16,24 @@ this directory to `/usr/share/subcult/default/`. Omarchy counterpart:
 | `chromium/extensions/` | Chromium external extension files (→ `/usr/share/chromium/extensions/`): Vencord Web for the Discord web app (ADR 0042) |
 | `chromium/policies/managed/color.json` | Chromium's frame colour for the default theme (→ `/etc/chromium/policies/managed/`); `subcult theme apply-system` replaces it with the user's (ADR 0037) |
 | `shell/workspaces.json` | Workspace names: `{"workspaces": [{"id": 3, "name": "Workbench", "short": "WRK"}]}`; the user's `~/.config/subcult/shell/workspaces.json` replaces entries by id. The bar shows the token (or the number), the OSD shows the name on a switch |
-| `shell/settings.json` | The settings the shell's menu panel lists: each one's group, label, kind and the file and key it writes |
 | `shell/zshrc`, `shell/bashrc`, `shell/aliases.sh`, `shell/functions.sh`, `shell/starship.toml` | The interactive shell setup (ADR 0041), sourced by the user's `~/.zshrc` and `~/.bashrc`: aliases and functions for both shells (files through eza and fzf, git shortcuts, the coding agents, `y` for yazi, `ga`/`gd` worktrees, `fip`/`dip`/`lip` port forwards, the `tdl`/`tdlm`/`tsl` tmux layouts, `compress`), starship with this prompt until the user has `~/.config/starship.toml`, atuin on Ctrl-R, zoxide behind `cd`, fzf keys, mise. `shell/completions/` completes the `subcult` command in both shells from the `subcult-*` programs on `PATH` |
 | `launcher/snippets.json` | The launcher's default snippets; the user's `~/.config/subcult/launcher/snippets.json` adds to them (ADR 0057) |
 | `launcher/quicklinks.json` | The launcher's web search engines and quicklinks; the user's `~/.config/subcult/launcher/quicklinks.json` adds or replaces them by keyword (ADR 0057) |
-| `launcher/symbols.json` | The characters the launcher's `:` picker offers beside emoji (dashes, arrows, maths and similar), with names to search by (ADR 0057) |
 | `launcher/favorites.json` | The launcher's home-screen favorites, by desktop entry id; the user's `~/.config/subcult/launcher/favorites.json` replaces the list (ADR 0057) |
 | `fontconfig/` | The three font roles (→ `/usr/share/fontconfig/conf.avail/`, linked from `/etc/fonts/conf.d/`); includes the user's `~/.config/subcult/fonts.conf` first |
 | `cursor/` | The Subarchy cursor's SVG shapes and `shapes.tsv`; `subcult cursor` builds them (the package ships the lavender theme in `/usr/share/icons/subcult-cursor/`) |
 | `gtk/` | GSettings override (→ `/usr/share/glib-2.0/schemas/`) and GTK 3/4 `settings.ini` (→ `/etc/xdg/`); theme adw-gtk3-dark, which takes Pult's colours (ADR 0037) |
 | `kde/` | `kdeglobals` (→ `/etc/xdg/`) selecting the `Pult` colour scheme for KDE apps, and `Pult.colors` (→ `/usr/share/color-schemes/`), the default theme's copy until `pult apply` writes the user's (ADR 0037) |
 | `kitty/` | kitty's system config and the Subcult Ink colours (→ `/etc/xdg/kitty/`) |
-| `nvim/` | Subcult Ink and the `subcult` colour scheme for Neovim, and the plugin that selects it (→ `/usr/share/nvim/site/`) |
-| `system/` | systemd units, drop-ins and rules. The package enables the five session units (`subcult-shell`, `subcult-display`, `subcult-idle`, `subcult-screensaver`, `subcult-clipboard`) through links under `/usr/lib`, so `systemctl --user disable` has no effect on them; turn one off with `systemctl --user mask <unit>` |
-| `pam/` | The lock screen's PAM stacks (→ `/etc/pam.d/`): `subcult-lock` for the password, `subcult-lock-fingerprint` for a fingerprint beside it (ADR 0036, 0023) |
-| `security/` | `faillock.conf`, which the installer copies to `/etc/security/` (ADR 0063) |
-| `pacman/` | `snapshot`, the Arch Linux Archive date the stable channel installs from (ADR 0026) |
-| `plymouth/` | The `subarchy` boot splash (→ `/usr/share/plymouth/themes/subarchy/`; the package renders its SVGs to PNG) (ADR 0013) |
+| `nvim/` | Subcult Ink for Neovim (→ `/usr/share/nvim/site/`) |
+| `system/` | systemd units, drop-ins and rules, including `subcult-shell.service` |
 | `polkit/` | The polkit action for `subcult theme apply-system` (ADR 0037, 0062) |
 | `sddm/` | SDDM greeter running in Hyprland (`subarchy.conf` → `/usr/lib/sddm/sddm.conf.d/`), the greeter's compositor config, and the `SUBCULT` session file (→ `/usr/share/wayland-sessions/`) that starts Hyprland through uwsm (ADR 0030, 0031). |
+| `pacman/snapshot` | The stable channel's Arch Linux Archive snapshot date (ADR 0026) |
+| `pam/` | The lock's password and fingerprint PAM stacks (→ `/etc/pam.d/`, ADR 0036) |
+| `plymouth/` | The boot splash theme (→ `/usr/share/plymouth/themes/subarchy/`, ADR 0013) |
+| `security/faillock.conf` | pam_faillock settings the installer copies to `/etc/security/` (ADR 0063) |
 
-`subcult theme apply-system` (`internal/systheme`, ADR 0037, 0062) themes SDDM, Limine and Plymouth from the user's palette.
+`subcult theme apply-system` applies the user's palette to SDDM, Plymouth, Limine and Chromium (ADR 0037).
 
 Check the Hyprland configs with `SUBCULT_PATH=$PWD Hyprland --verify-config -c default/hypr/user-hyprland.lua`.

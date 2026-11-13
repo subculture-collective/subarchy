@@ -31,6 +31,8 @@
 # and fill checksums with scripts/aur-fill-sums.sh from the voxtype repo,
 # which reads the release's CI-signed SHA256SUMS.txt. updpkgsums only sees
 # the selected variants and cannot fill the _vt_assets_<arch> tables.
+# Subarchy: the variant set is fixed whatever the build machine has; see
+# _vt_select.
 pkgname=voxtype-bin
 pkgver=1.2.1
 pkgrel=1
@@ -321,8 +323,11 @@ _vt_select() {
     # so the default is every CPU tier (baseline, avx2, avx512) plus vulkan;
     # the install script picks the tier for the CPU it lands on. The ONNX
     # and CUDA/MIGraphX variants stay out: with them the package is about
-    # 900 MB.
+    # 900 MB. For the same reason the variants an earlier build recorded and
+    # the one /usr/bin/voxtype runs on the build machine are not added: a
+    # host with an ONNX or CUDA voxtype would otherwise put those in.
     local request=${VOXTYPE_VARIANTS:-avx2 avx512}
+    drop_recorded=1
     request=${request//,/ }
     for name in $request; do
         case "$name" in
@@ -366,7 +371,7 @@ _vt_select() {
     else
         want+="$(_vt_cpu_tier) baseline vulkan "
     fi
-    want+="$(_vt_active_variant "$tarch") "
+    # Subarchy: not "$(_vt_active_variant "$tarch")"; see above.
 
     _vt_selected=()
     _vt_explicit=()

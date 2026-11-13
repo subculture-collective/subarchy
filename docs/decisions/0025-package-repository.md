@@ -79,11 +79,11 @@ keyring release.
   ready for `SigLevel = Required` on the `[subarchy]` repository the moment
   packages are published there (#67).
 - 2026-11-13: the app list's AUR apps joined `packaging/aur/`, pinned and
-  built in a clean container: `claude-code`, `cliamp`, `localsend-bin`,
-  `voxtype-bin`, `ttfx`, `proton-mail-bin`, `proton-pass-bin`,
-  `proton-pass-cli`, `proton-authenticator-bin` and `proton-drive-cli-bin`.
-  The install lists name them, so new installs get them. `claude-code` and
-  `proton-pass-bin` are over the registry's 100 MB upload limit
-  ([[package-publishing|Package publishing]]).
+  built in a clean container: `cliamp`, `localsend-bin`, `voxtype-bin`,
+  `ttfx`, `proton-mail-bin`, `proton-pass-cli`, `proton-authenticator-bin`
+  and `proton-drive-cli-bin`. The install lists name them, so new installs
+  get them. `claude-code` and `proton-pass-bin` are over the registry's
+  100 MB upload limit and are added after their files are uploaded through
+  the origin ([[package-publishing|Package publishing]]).
 
 Related: [[decision-map|Decision map]] · [[0026-update-model|ADR 0026]] · [[0027-third-party-software|ADR 0027]]

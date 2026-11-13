@@ -698,14 +698,14 @@ def boot(disk: Path, vars_file: Path) -> bool:
             # One command from each group of install/packages/cli.txt.
             "cli_tools": serial.run(
                 "for c in curl rsync 7z bat eza rg fzf zoxide jq yq tldr starship atuin btop yazi lazygit lazydocker tmux"
-                " fastfetch gh gt tea delta yt-dlp ffmpeg magick dust duf claude codex opencode cliamp ttfx; do"
+                " fastfetch gh gt tea delta yt-dlp ffmpeg magick dust duf codex opencode cliamp ttfx; do"
                 " command -v $c >/dev/null || echo missing:$c; done; tea --version >/dev/null 2>&1 || echo missing:tea-runs; echo CLI_DONE"
             ),
             # The apps rebuilt in Subarchy's repository and Proton VPN, from
             # install/packages/desktop.txt. /usr/bin/voxtype is made by the
             # package's install script, so it also shows that script ran.
             "desktop_apps": serial.run(
-                "for c in voxtype localsend proton-mail proton-pass pass-cli protonvpn-app protonvpn"
+                "for c in voxtype localsend proton-mail pass-cli protonvpn-app protonvpn"
                 " proton-authenticator proton-drive; do command -v $c >/dev/null || echo missing:$c; done; echo APPS_DONE"
             ),
             "power_key": serial.run("busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey;"
@@ -1086,6 +1086,10 @@ finally:
         "GPU hook installed, silent without hybrid graphics": r["gpu"].split()[:2] == ["HOOK", "0"]
         and "chosen:  intel" in r["gpu"],
         "ufw active, incoming denied": "Status: active" in r["ufw"] and "deny (incoming)" in r["ufw"],
+        "ufw lets LocalSend in on 53317 tcp and udp": all(
+            any(line.split()[:3] == [port, "ALLOW", "IN"] for line in r["ufw"].splitlines())
+            for port in ("53317/tcp", "53317/udp")
+        ),
         "AppArmor enabled": "apparmor" in r["lsm"] and r["lsm"].strip().endswith("Y"),
         "sysctl hardening": r["sysctl"].split() == ["2", "1", "1"],
         "the installer removed an earlier install's boot entry and kept its own": r["boot_entries"].split()

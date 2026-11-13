@@ -15,6 +15,8 @@ PanelBase {
   property var report: null
   property int error: 0
   property bool checking: false
+  // The server changed while a check was running: its result is stale.
+  property bool recheck: false
 
   implicitWidth: 340
   implicitHeight: column.implicitHeight
@@ -28,21 +30,35 @@ PanelBase {
   }
 
   Component.onCompleted: check()
-  // A server typed in the field is checked at once, as the bar widget does.
+  // A server typed in the field is checked at once, as the bar widget does;
+  // a check still running for the old server is redone when it ends.
   onServerChanged: {
     panel.report = null
     panel.error = 0
-    panel.check()
+    if (query.running)
+      panel.recheck = true
+    else
+      panel.check()
   }
 
   Process {
     id: query
     stdout: StdioCollector {
-      onStreamFinished: panel.report = Model.parse(text)
+      onStreamFinished: {
+        if (!panel.recheck)
+          panel.report = Model.parse(text)
+      }
     }
     onExited: (code) => {
-      panel.error = code
       panel.checking = false
+      if (panel.recheck) {
+        panel.recheck = false
+        panel.report = null
+        panel.error = 0
+        panel.check()
+        return
+      }
+      panel.error = code
     }
   }
 

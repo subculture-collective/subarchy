@@ -16,6 +16,14 @@ function focusRank(o) {
   return typeof v === "number" && v >= 0 ? v : 1e9
 }
 
+// Hyprland toplevels ({ address, lastIpcObject }) to addresses, most
+// recently focused first by focusRank.
+function byFocus(toplevels) {
+  return toplevels.slice()
+    .sort((a, b) => focusRank(a.lastIpcObject) - focusRank(b.lastIpcObject))
+    .map(t => t.address)
+}
+
 // Put the newly focused window first, keep at most cap entries.
 function remember(history, address, cap) {
   if (!address)

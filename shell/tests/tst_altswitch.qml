@@ -42,14 +42,23 @@ TestCase {
     verify(Model.focusRank({ focusHistoryID: 3 }) < Model.focusRank({}), "missing: last")
   }
 
-  // After a shell start the history is empty; the clients arrive sorted by
-  // Hyprland's focus history, focused window first, so Alt-Tab picks the
-  // window used before it.
+  function test_byFocus() {
+    const tops = [
+      { address: "a", lastIpcObject: { focusHistoryID: 1 } },
+      { address: "none" },
+      { address: "b", lastIpcObject: { focusHistoryID: 0 } },
+      { address: "c", lastIpcObject: { focusHistoryID: 2 } }
+    ]
+    compare(Model.byFocus(tops), ["b", "a", "c", "none"], "focused first, no IPC object last")
+    compare(tops[0].address, "a", "the input is not reordered")
+    compare(Model.byFocus([]), [])
+  }
+
+  // After a shell start the history is empty; Hyprland's focus history
+  // orders the clients, so Alt-Tab picks the window used before.
   function test_startsOnPreviousWithEmptyHistory() {
-    const ipc = { a: { focusHistoryID: 1 }, b: { focusHistoryID: 0 } }
-    const clients = ["a", "b"].sort((x, y) => Model.focusRank(ipc[x]) - Model.focusRank(ipc[y]))
-    compare(clients, ["b", "a"])
-    const order = Model.order(clients, [])
+    const tops = [{ address: "a", lastIpcObject: { focusHistoryID: 1 } }, { address: "b", lastIpcObject: { focusHistoryID: 0 } }]
+    const order = Model.order(Model.byFocus(tops), [])
     compare(order[Model.start(order, 1)], "a")
   }
 }

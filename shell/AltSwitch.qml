@@ -54,10 +54,7 @@ PanelWindow { // qmllint disable uncreatable-type
       Hyprland.refreshToplevels()
       // Hyprland's focus history orders the windows the shell has not seen
       // focused, such as everything open before it started.
-      const clients = Hyprland.toplevels.values.slice()
-        .sort((a, b) => Model.focusRank(a.lastIpcObject) - Model.focusRank(b.lastIpcObject))
-        .map(t => t.address)
-      sw.order = Model.order(clients, sw.history)
+      sw.order = Model.order(Model.byFocus(Hyprland.toplevels.values), sw.history)
       sw.index = Model.start(sw.order, n)
     } else {
       sw.index = Model.next(sw.order, sw.index, n)

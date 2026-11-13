@@ -115,8 +115,9 @@ The scripted stage. It runs as root on the live ISO, reads a `KEY=value`
 config file (keys listed in the script's header) and needs `--yes`, because
 it wipes the disk named by `DISK`. It refuses a disk that has mounted
 partitions or that holds the install medium, and a user name that is
-already an account or group, which `useradd` would refuse after the
-wipe. Other disks are left alone.
+already an account or group on the live image, or one of the groups the
+installed system adds (`docker`, `realtime`), which `useradd` would refuse
+after the wipe. Other disks are left alone.
 
 What it builds:
 

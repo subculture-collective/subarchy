@@ -173,6 +173,15 @@ getent() { [[ $1 == group && $2 == video ]]; }
 out=$( (read_config "$cfg") 2>&1) && fail "USERNAME=video was accepted"
 [[ $out == *"video is a system account or group"* ]] || fail "user name message: $out"
 unset -f getent
+# docker and realtime are groups only on the installed system, so the live
+# image's getent does not know them.
+getent() { return 2; }
+for name in docker realtime; do
+  sed -i "s/^USERNAME=.*/USERNAME=$name/" "$cfg"
+  out=$( (read_config "$cfg") 2>&1) && fail "USERNAME=$name was accepted"
+  [[ $out == *"$name is a system account or group"* ]] || fail "user name message: $out"
+done
+unset -f getent
 rm -f -- "$cfg"
 
 # --help lists every config key.

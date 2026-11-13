@@ -26,8 +26,9 @@ PanelWindow { // qmllint disable uncreatable-type
   property string backlight: ""
 
   readonly property var sink: Pipewire.defaultAudioSink
-  // A new sink's first reading is not a change of volume.
-  onSinkChanged: osd.lastVolume = null
+  // A new sink's first reading is not a change of volume; one that is
+  // already loaded gives its reading as the baseline at once.
+  onSinkChanged: osd.lastVolume = Model.baseline(osd.sink)
 
   visible: kind !== ""
   screen: place.screen

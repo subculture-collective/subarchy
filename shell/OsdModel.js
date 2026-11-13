@@ -18,6 +18,16 @@ function volumeChanged(previous, current) {
   return previous.volume !== current.volume || previous.muted !== current.muted
 }
 
+// The baseline for a sink just made the default: its reading when PipeWire
+// already has it (the audio panel tracks every sink, so no first reading
+// will come), and none while it is still loading, whose first reading is
+// then not a change.
+function baseline(sink) {
+  if (!sink || !sink.ready || !sink.audio)
+    return null
+  return { volume: sink.audio.volume, muted: sink.audio.muted }
+}
+
 // The caps-lock label from the `brightness` of every caps-lock LED under
 // /sys/class/leds, one per line: on when any is lit. A machine without such
 // an LED gets the plain name, since the state is unknown.

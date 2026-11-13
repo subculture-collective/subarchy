@@ -27,6 +27,22 @@ TestCase {
     verify(!Model.volumeChanged({ volume: 0.5, muted: false }, { volume: 0.5, muted: false }))
   }
 
+  // Switching to a sink PipeWire already reports: its reading is the
+  // baseline, so the first adjustment after the switch shows.
+  function test_volumeBaselineOfALoadedSink() {
+    const sink = { ready: true, audio: { volume: 0.4, muted: false } }
+    const base = Model.baseline(sink)
+    compare(base, { volume: 0.4, muted: false })
+    verify(Model.volumeChanged(base, { volume: 0.45, muted: false }), "the first adjustment after a switch shows")
+    verify(Model.volumeChanged(base, { volume: 0.4, muted: true }))
+  }
+
+  function test_volumeBaselineOfALoadingSink() {
+    compare(Model.baseline(null), null, "no sink")
+    compare(Model.baseline({ ready: false, audio: { volume: 0, muted: false } }), null, "still loading")
+    compare(Model.baseline({ ready: true, audio: null }), null, "no audio")
+  }
+
   function test_capsLabel() {
     compare(Model.capsLabel("0\n1\n"), "Caps Lock on", "any lit LED")
     compare(Model.capsLabel("0\n0\n"), "Caps Lock off")

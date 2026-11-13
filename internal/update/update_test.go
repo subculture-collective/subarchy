@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,13 +18,23 @@ type fake struct {
 	outputs map[string]string   // joined argv -> output
 	series  map[string][]string // joined argv -> one output per call, in order
 	fail    map[string]bool     // joined argv -> error
+	errs    map[string]error    // joined argv -> this error, from Run
 	ran     []string
 }
+
+// exitCode is a failure with a process exit code, like *exec.ExitError.
+type exitCode int
+
+func (e exitCode) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
+func (e exitCode) ExitCode() int { return int(e) }
 
 func (f *fake) Run(ctx context.Context, argv ...string) error {
 	key := strings.Join(argv, " ")
 	f.ran = append(f.ran, key)
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := f.errs[key]; err != nil {
 		return err
 	}
 	if f.fail[key] {
@@ -117,7 +128,7 @@ func TestUpdatePausesHyprlandReload(t *testing.T) {
 		{name: "successful upgrade", option: `{"bool":false}`},
 		{name: "already disabled", option: `{"bool":true}`},
 		{name: "failed upgrade restores", option: `{"bool":false}`, failure: "sudo /usr/bin/subcult-update privileged upgrade --noconfirm", wantError: true},
-		{name: "failed migration restores", option: `{"bool":false}`, failure: "bash -euo pipefail", wantError: true},
+		{name: "failed migration still reloads", option: `{"bool":false}`, failure: "bash -euo pipefail", wantError: true},
 		{name: "cannot pause stops upgrade", option: `{"bool":false}`, failure: pauseReload, wantError: true},
 		{name: "unknown option stops upgrade", option: `{}`, wantError: true},
 	} {
@@ -161,10 +172,13 @@ func TestUpdatePausesHyprlandReload(t *testing.T) {
 			if pause < 0 || upgrade <= pause || resume <= upgrade {
 				t.Fatalf("watcher protection order: %v", f.ran)
 			}
-			if !tt.wantError && slices.Index(f.ran, "hyprctl reload") <= upgrade {
+			// The packages are in place after a failed migration, so their
+			// configuration loads; after a failed upgrade it must not.
+			upgradeFailed := tt.failure == "sudo /usr/bin/subcult-update privileged upgrade --noconfirm"
+			if !upgradeFailed && slices.Index(f.ran, "hyprctl reload") <= upgrade {
 				t.Fatalf("no final reload: %v", f.ran)
 			}
-			if tt.wantError && slices.Contains(f.ran, "hyprctl reload") {
+			if upgradeFailed && slices.Contains(f.ran, "hyprctl reload") {
 				t.Fatalf("reloaded incomplete update: %v", f.ran)
 			}
 		})
@@ -285,10 +299,12 @@ func TestNoSnapshotAndPackageFailure(t *testing.T) {
 	}
 }
 
+const fwupdYes = "fwupdmgr update --assume-yes --no-reboot-check"
+
 func TestOptionalFailureContinues(t *testing.T) {
 	f := &fake{
 		tools: map[string]bool{"yay": true, "fwupdmgr": true},
-		fail:  map[string]bool{"fwupdmgr update": true},
+		fail:  map[string]bool{fwupdYes: true},
 	}
 	u, out := newUpdater(t, f, true)
 	if _, err := u.Run(context.Background()); err != nil {
@@ -296,6 +312,91 @@ func TestOptionalFailureContinues(t *testing.T) {
 	}
 	if !slices.Contains(f.ran, "yay -Sua --noconfirm") || !strings.Contains(out.String(), "firmware: failed (continuing)") {
 		t.Errorf("ran %q, out %q", f.ran, out)
+	}
+}
+
+// fwupdmgr exits 2 when there are no updatable devices or no updates: the
+// common case, and in every VM. That is not a failure.
+func TestFirmwareNothingToDoIsQuiet(t *testing.T) {
+	f := &fake{
+		tools: map[string]bool{"fwupdmgr": true},
+		errs:  map[string]error{"fwupdmgr update": fmt.Errorf("fwupdmgr update: %w", exitCode(2))},
+	}
+	u, out := newUpdater(t, f, false)
+	if _, err := u.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "firmware:") {
+		t.Errorf("nothing to do reported as a failure: %q", out)
+	}
+}
+
+// --yes answers every question, fwupdmgr's included, and the firmware step
+// must not reboot in the middle of the update.
+func TestFirmwareFlags(t *testing.T) {
+	for _, tt := range []struct {
+		yes  bool
+		want string
+	}{
+		{true, fwupdYes},
+		{false, "fwupdmgr update"},
+	} {
+		f := &fake{tools: map[string]bool{"fwupdmgr": true}}
+		u, _ := newUpdater(t, f, tt.yes)
+		if _, err := u.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(f.ran, tt.want) {
+			t.Errorf("yes=%v: ran %q, want %q", tt.yes, f.ran, tt.want)
+		}
+	}
+}
+
+// A failed migration comes after the packages were replaced, so the reload
+// and restarts still run and the error comes back at the end.
+func TestMigrationFailureStillRestarts(t *testing.T) {
+	f := &fake{
+		tools:   map[string]bool{"hyprctl": true},
+		outputs: map[string]string{"hyprctl -j getoption misc:disable_autoreload": `{"bool":false}`},
+		series:  map[string][]string{"pacman -Q subarchy": {"subarchy 0.1.0-1", "subarchy 0.2.0-1"}},
+		fail:    map[string]bool{},
+	}
+	u, _ := newUpdater(t, f, true)
+	u.O.HyprlandSession = true
+	script := filepath.Join(u.O.Migrations.Dir, "1794256000.sh")
+	if err := os.WriteFile(script, []byte("false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.fail["bash -euo pipefail "+script] = true
+	rep, err := u.Run(context.Background())
+	if err == nil {
+		t.Fatal("a failed migration returned no error")
+	}
+	if !slices.Contains(f.ran, "hyprctl reload") || !slices.Contains(f.ran, shellRestart) || !rep.ShellRestarted {
+		t.Errorf("ran %q, report %+v", f.ran, rep)
+	}
+}
+
+// A failed DKMS query is reported; the migrations still run.
+func TestDKMSFailureContinues(t *testing.T) {
+	f := &fake{
+		tools: map[string]bool{"dkms": true},
+		fail:  map[string]bool{"dkms status": true},
+	}
+	u, out := newUpdater(t, f, true)
+	script := filepath.Join(u.O.Migrations.Dir, "1794256000.sh")
+	if err := os.WriteFile(script, []byte("true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := u.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(f.ran, "bash -euo pipefail "+script) || len(rep.Migrations) != 1 {
+		t.Errorf("migrations did not run: %q, %+v", f.ran, rep)
+	}
+	if !strings.Contains(out.String(), "DKMS check: dkms status: failed (continuing)") {
+		t.Errorf("out = %q", out)
 	}
 }
 

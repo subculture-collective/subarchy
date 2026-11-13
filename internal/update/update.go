@@ -91,7 +91,8 @@ func (u *Updater) pkgVersion(ctx context.Context, name string) string {
 }
 
 // Run performs the update. A failure in the snapshot or package step stops
-// the run; later steps report problems without stopping.
+// the run; later steps report problems without stopping. A failed migration
+// is returned as the command's error after the remaining steps have run.
 func (u *Updater) Run(ctx context.Context) (Report, error) {
 	var rep Report
 	say := func(format string, args ...any) { fmt.Fprintf(u.O.Stdout, ">> "+format+"\n", args...) }
@@ -129,21 +130,19 @@ func (u *Updater) Run(ctx context.Context) (Report, error) {
 		say("checking DKMS modules")
 		status, err := u.R.Output(ctx, "dkms", "status")
 		if err != nil {
-			return rep, fmt.Errorf("dkms status: %w", err)
+			fmt.Fprintf(u.O.Stdout, "   DKMS check: dkms status: %v (continuing)\n", err)
+		} else if kernels, err := InstalledKernels(u.O.ModulesDir); err != nil {
+			fmt.Fprintf(u.O.Stdout, "   DKMS check: %v (continuing)\n", err)
+		} else {
+			rep.DKMSProblems = CheckDKMS(status, kernels)
 		}
-		kernels, err := InstalledKernels(u.O.ModulesDir)
-		if err != nil {
-			return rep, err
-		}
-		rep.DKMSProblems = CheckDKMS(status, kernels)
 	}
 
+	// The packages are already replaced, so a failed migration must not
+	// skip the reload and restarts below: report it at the end.
 	say("running migrations")
-	ran, err := u.O.Migrations.Run(ctx, u.R)
+	ran, migErr := u.O.Migrations.Run(ctx, u.R)
 	rep.Migrations = ran
-	if err != nil {
-		return rep, err
-	}
 
 	optional := []struct {
 		tool, what string
@@ -162,7 +161,17 @@ func (u *Updater) Run(ctx context.Context) (Report, error) {
 		if u.O.Yes && o.tool == "yay" {
 			argv = append(argv, "--noconfirm")
 		}
+		if u.O.Yes && o.tool == "fwupdmgr" {
+			// Never prompt, and never reboot in the middle of the update.
+			argv = append(argv, "--assume-yes", "--no-reboot-check")
+		}
 		if err := u.R.Run(ctx, argv...); err != nil {
+			// fwupdmgr exits 2 when there is nothing to do: no updatable
+			// devices or no updates available.
+			var ec interface{ ExitCode() int }
+			if o.tool == "fwupdmgr" && errors.As(err, &ec) && ec.ExitCode() == 2 {
+				continue
+			}
 			fmt.Fprintf(u.O.Stdout, "   %s: %v (continuing)\n", o.what, err)
 		}
 	}
@@ -229,7 +238,7 @@ func (u *Updater) Run(ctx context.Context) (Report, error) {
 		rep.RunningKernel = strings.TrimSpace(running)
 		rep.RebootNeeded = RebootNeeded(u.O.ModulesDir, rep.RunningKernel)
 	}
-	return rep, nil
+	return rep, migErr
 }
 
 // cleanup offers to remove orphaned packages and prunes the package cache.

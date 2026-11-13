@@ -18,6 +18,11 @@ Rectangle {
   property bool authenticating: false
   property bool startingSession: false
   property string message: ""
+  // What PAM said during this attempt (faillock's "The account is locked
+  // due to 10 failed logins." and "(2 minutes left to unlock)"), shown
+  // instead of the general line, as the lock screen does.
+  property string pamText: ""
+  property bool afterPamText: false
 
   color: root.base
 
@@ -29,6 +34,8 @@ Rectangle {
       return
     }
     root.message = ""
+    root.pamText = ""
+    root.afterPamText = false
     root.authenticating = true
     sddm.login(user.text.trim(), password.text, sessionModel.lastIndex)
   }
@@ -243,14 +250,48 @@ Rectangle {
     }
   }
 
+  // SDDM sends each PAM error line as informationMessage followed by
+  // loginFailed while PAM is still running, then the result of the whole
+  // check (pam_strerror's "Authentication failure") the same way, then one
+  // more loginFailed. A loginFailed right after a PAM line shows that line
+  // and keeps the form busy; the attempt ends on the next loginFailed.
+  Timer {
+    id: settle
+    interval: 10000
+    onTriggered: root.endAttempt()
+  }
+
+  function endAttempt() {
+    settle.stop()
+    if (!root.authenticating)
+      return
+    root.authenticating = false
+    password.text = ""
+    password.forceActiveFocus()
+    Qt.callLater(() => root.reveal(errorMessage))
+  }
+
   Connections {
     target: sddm
+    function onInformationMessage(message) {
+      if (!root.authenticating)
+        return
+      const line = String(message || "").replace(/[\u0000-\u001f\u007f]+/g, " ").trim()
+      // The general result says no more than the line the greeter shows.
+      root.afterPamText = line !== "" && line !== "Authentication failure"
+      if (root.afterPamText)
+        root.pamText = ((root.pamText ? root.pamText + " " : "") + line).slice(0, 300)
+    }
     function onLoginFailed() {
-      root.authenticating = false
-      root.message = "That password didn't work. Try again."
-      password.text = ""
-      password.forceActiveFocus()
-      Qt.callLater(() => root.reveal(errorMessage))
+      if (!root.authenticating)
+        return
+      root.message = root.pamText || "That password didn't work. Try again."
+      if (root.afterPamText) {
+        root.afterPamText = false
+        settle.restart()
+        return
+      }
+      root.endAttempt()
     }
     function onLoginSucceeded() {
       root.startingSession = true

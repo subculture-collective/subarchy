@@ -93,8 +93,9 @@ blockquote p{margin:0} blockquote em{color:var(--text)}
 .docs h3{font-size:17px;color:var(--violet);margin-top:8px!important}
 .docs .lede{font-size:19px;line-height:1.55}
 ol.steps{list-style:none;counter-reset:s;padding:0;display:flex;flex-direction:column;gap:14px}
-ol.steps>li{counter-increment:s;display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 10px}
-ol.steps>li::before{content:counter(s);font-family:var(--mono);font-size:11px;width:20px;height:20px;margin-top:3px;display:flex;align-items:center;justify-content:center;border:1px solid var(--accent);color:var(--accent)}
+/* The square is centred on the first line: (16px x 1.6 line - 16px square) / 2. */
+ol.steps>li{counter-increment:s;display:grid;grid-template-columns:16px minmax(0,1fr);gap:4px 12px;line-height:1.6}
+ol.steps>li::before{content:counter(s);font-family:var(--mono);font-size:11px;line-height:1;width:16px;height:16px;margin-top:4.8px;display:flex;align-items:center;justify-content:center;border:1px solid var(--accent);color:var(--accent)}
 ol.steps>li>*{grid-column:2;margin:0}
 .center{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;padding-block:48px}
 .center img{width:160px;height:auto} .center h1{font-size:22px;font-weight:400;margin:0} .center p{margin:0}

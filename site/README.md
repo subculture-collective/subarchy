@@ -61,7 +61,9 @@ settings from each `shell/widgets/*/manifest.json` (through
 `shell/widgets/index.json`), and whether and where the widget is in the bar
 from `default/shell/bar.json`. Only the wording is the site's own, in
 [tools/site/plugins.json](../tools/site/plugins.json): a category, a
-one-line summary, a paragraph or two, and one line per setting. The build
+one-line summary, a paragraph or two, one line per setting, and an optional
+`example` for the settings snippet, for a plugin that stays hidden until a
+setting is filled in. The build
 stops when a widget has no entry there or a setting is not described, so a
 new or changed widget fails `make verify` until its page is written and the
 site rebuilt. `"hidden": true` leaves an entry out (`dell-power`, an alias

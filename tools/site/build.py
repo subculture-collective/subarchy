@@ -302,6 +302,8 @@ def plugins_data():
             raise BuildError(f"plugins.json: {d}: no category {w['category']!r}")
         if set(m.get("settings") or {}) != set(w["settings"]):
             raise BuildError(f"plugins.json: {d}: settings must describe {sorted(m.get('settings') or {})}")
+        if not set(w.get("example") or {}) <= set(w["settings"]):
+            raise BuildError(f"plugins.json: {d}: the example names a setting the manifest does not have")
         section = next((label for s, label in SECTIONS if m["id"] in layout.get(s, [])), None)
         out.append({"dir": d, "m": m, "w": w, "cat": cats[w["category"]], "section": section,
                     "minimal": m["id"] in layout.get("minimal", []),
@@ -392,7 +394,7 @@ def plugin_page(p, prev, nxt, layout):
         rows = "".join(f'<tr><th scope="row"><code>{html.escape(k)}</code></th><td><code>{html.escape(json.dumps(v))}</code></td>'
                        f"<td>{w['settings'][k]}</td></tr>" for k, v in settings.items())
         k0, v0 = next(((k, v) for k, v in settings.items() if v not in ("", [], {})), next(iter(settings.items())))
-        sample = json.dumps({"widgets": {m["id"]: {k0: v0}}}, indent=1)
+        sample = json.dumps({"widgets": {m["id"]: w.get("example") or {k0: v0}}}, indent=1)
         sets = (f'<div class="scroll"><table><caption class="sr">{name} settings</caption><thead><tr><th scope="col">Setting</th>'
                 f'<th scope="col">Default</th><th scope="col">Means</th></tr></thead><tbody>{rows}</tbody></table></div>\n'
                 f"<p>Set them under the plugin's id in <code>~/.config/subcult/shell/bar.json</code>:</p>\n<pre>{html.escape(sample)}</pre>")

@@ -39,8 +39,8 @@
 <div class="phero"><span class="pmark" aria-hidden="true">N8</span><div><h1>n8n</h1><p class="lede">Active workflows and recent failures on an n8n server.</p></div></div>
 <div class="pcols">
 <div class="pmain">
-<p>Shows how many workflows are active and how many runs failed recently. Set the server in its panel and store the API key in the keyring with <code>secret-tool store --label='n8n API key' service subcult-n8n</code>.</p>
-<p>It checks every minute on mains power and every five on battery. The key never lands in a config file or on a command line. Hidden until a server is set.</p>
+<p>Shows how many workflows are active and how many runs failed recently. It stays hidden until it knows a server, so set the first one in <code>~/.config/subcult/shell/bar.json</code> (below); after that, its panel changes it. Store the API key in the keyring with <code>secret-tool store --label='n8n API key' service subcult-n8n</code>.</p>
+<p>It checks every minute on mains power and every five on battery. The key never lands in a config file or on a command line.</p>
 <h2 id="turn-on">In the bar</h2>
 <p>It is in the bar from the start, in the <strong>right</strong> section. To move or remove it, click the SUBCULT mark at the left of the bar, open <strong>Bar layout</strong> in Settings, edit the list and apply.</p>
 <h2 id="settings">Settings</h2>
@@ -49,7 +49,7 @@
 <pre>{
  &quot;widgets&quot;: {
   &quot;subcult.n8n&quot;: {
-   &quot;server&quot;: &quot;&quot;
+   &quot;server&quot;: &quot;https://n8n.example.com&quot;
   }
  }
 }</pre>

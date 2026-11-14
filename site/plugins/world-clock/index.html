@@ -39,7 +39,7 @@
 <div class="phero"><span class="pmark" aria-hidden="true">Wo</span><div><h1>World clock</h1><p class="lede">The time in other time zones.</p></div></div>
 <div class="pcols">
 <div class="pmain">
-<p>One line per time zone you list. Daylight saving is checked at the top of each hour.</p>
+<p>One line per time zone you list in <code>~/.config/subcult/shell/bar.json</code> (below). It is in the bar from the start but stays hidden until you list a zone. Daylight saving is checked at the top of each hour.</p>
 <h2 id="turn-on">In the bar</h2>
 <p>It is in the bar from the start, in the <strong>centre</strong> section. To move or remove it, click the SUBCULT mark at the left of the bar, open <strong>Bar layout</strong> in Settings, edit the list and apply.</p>
 <h2 id="settings">Settings</h2>
@@ -48,7 +48,10 @@
 <pre>{
  &quot;widgets&quot;: {
   &quot;subcult.world-clock&quot;: {
-   &quot;zones&quot;: []
+   &quot;zones&quot;: [
+    &quot;Asia/Tokyo&quot;,
+    &quot;Europe/Berlin&quot;
+   ]
   }
  }
 }</pre>

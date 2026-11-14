@@ -110,8 +110,9 @@
   "n8n": {
    "category": "tools",
    "summary": "Active workflows and recent failures on an n8n server.",
-   "about": ["Shows how many workflows are active and how many runs failed recently. Set the server in its panel and store the API key in the keyring with <code>secret-tool store --label='n8n API key' service subcult-n8n</code>.", "It checks every minute on mains power and every five on battery. The key never lands in a config file or on a command line. Hidden until a server is set."],
-   "settings": {"server": "The n8n server's address."}
+   "about": ["Shows how many workflows are active and how many runs failed recently. It stays hidden until it knows a server, so set the first one in <code>~/.config/subcult/shell/bar.json</code> (below); after that, its panel changes it. Store the API key in the keyring with <code>secret-tool store --label='n8n API key' service subcult-n8n</code>.", "It checks every minute on mains power and every five on battery. The key never lands in a config file or on a command line."],
+   "settings": {"server": "The n8n server's address."},
+   "example": {"server": "https://n8n.example.com"}
   },
   "network": {
    "category": "network",
@@ -164,8 +165,9 @@
   "world-clock": {
    "category": "time",
    "summary": "The time in other time zones.",
-   "about": ["One line per time zone you list. Daylight saving is checked at the top of each hour."],
-   "settings": {"zones": "Time zones such as <code>Asia/Tokyo</code>."}
+   "about": ["One line per time zone you list in <code>~/.config/subcult/shell/bar.json</code> (below). It is in the bar from the start but stays hidden until you list a zone. Daylight saving is checked at the top of each hour."],
+   "settings": {"zones": "Time zones such as <code>Asia/Tokyo</code>."},
+   "example": {"zones": ["Asia/Tokyo", "Europe/Berlin"]}
   }
  }
 }

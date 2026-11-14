@@ -1,14 +1,13 @@
 /* Subarchy site. Tokens from studio/brands/subarchy/tokens.css in subcult-tv.
-   Departure Mono for headings and interface, Dank Mono for docs prose.
+   Departure Mono for headings and interface, Victor Mono for docs prose.
    1px lines, no radius, no motion: the same rules the desktop follows. */
 @font-face{font-family:"Departure Mono";src:url("/fonts/DepartureMono-Regular.woff2") format("woff2");font-display:swap}
-/* Dank Mono is licensed to the owner and copied in at deploy time, not kept in git.
-   Without it the docs fall back to Departure Mono. "optional" keeps the text from
-   jumping when the font arrives late: that visit stays in Departure Mono. */
-@font-face{font-family:"Dank Mono";src:url("/fonts/DankMono-Regular.woff2") format("woff2");font-weight:400;font-style:normal;font-display:optional}
-@font-face{font-family:"Dank Mono";src:url("/fonts/DankMono-Italic.woff2") format("woff2");font-weight:400;font-style:italic;font-display:optional}
-@font-face{font-family:"Dank Mono";src:url("/fonts/DankMono-Bold.woff2") format("woff2");font-weight:700;font-style:normal;font-display:optional}
-:root{--ground:#100B19;--panel:#1F1830;--line:#6E55B8;--seam:#3B2470;--text:#F0ECE4;--label:#9A92A8;--action:#00FF88;--action-text:#100B19;--link:#A78BFA;--accent:#00FF88;--violet:#A78BFA;--mono:"Departure Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--prose:"Dank Mono","Departure Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:dark}
+/* Victor Mono 1.5.6 (OFL), Latin subset from fontsource 5.3.0: the docs prose, with cursive italics.
+   "optional" keeps the text from jumping when the font arrives late: that visit stays in Departure Mono. */
+@font-face{font-family:"Victor Mono";src:url("/fonts/victor-mono-latin-500-normal.woff2") format("woff2");font-weight:400 500;font-style:normal;font-display:optional}
+@font-face{font-family:"Victor Mono";src:url("/fonts/victor-mono-latin-500-italic.woff2") format("woff2");font-weight:400 500;font-style:italic;font-display:optional}
+@font-face{font-family:"Victor Mono";src:url("/fonts/victor-mono-latin-700-normal.woff2") format("woff2");font-weight:700;font-style:normal;font-display:optional}
+:root{--ground:#100B19;--panel:#1F1830;--line:#6E55B8;--seam:#3B2470;--text:#F0ECE4;--label:#9A92A8;--action:#00FF88;--action-text:#100B19;--link:#A78BFA;--accent:#00FF88;--violet:#A78BFA;--mono:"Departure Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--prose:"Victor Mono","Departure Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:dark}
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--ground:#F0ECE4;--panel:#E4DFD3;--line:#100B19;--seam:#C9C2B4;--text:#100B19;--label:#5E5570;--action:#5B21B6;--action-text:#F0ECE4;--link:#5B21B6;--accent:#006B3C;--violet:#5B21B6;color-scheme:light}}
 :root[data-theme="light"]{--ground:#F0ECE4;--panel:#E4DFD3;--line:#100B19;--seam:#C9C2B4;--text:#100B19;--label:#5E5570;--action:#5B21B6;--action-text:#F0ECE4;--link:#5B21B6;--accent:#006B3C;--violet:#5B21B6;color-scheme:light}
 *{box-sizing:border-box}

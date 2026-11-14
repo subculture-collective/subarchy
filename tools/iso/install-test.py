@@ -1043,25 +1043,34 @@ finally:
         # real keys take, next then commit at once as a quick tap sends them:
         # from the second (focused) terminal it must land on exactly the first
         # (the session may hold other windows) and leave no switcher open.
-        # Then over IPC, back from the first to the second. Both are closed
-        # afterwards.
+        # Then over IPC, back to the other one (the second, unless the first
+        # switch failed). Both are closed afterwards. Each switch starts once
+        # the shell's focus history has the focused window first (its IPC
+        # state), and the result is polled: under host load the shell can lag
+        # Hyprland by seconds.
         glob = "hyprctl -i 0 dispatch 'hl.dsp.global(\"subcult:altswitch-%s\")' >/dev/null"
         alt = "quickshell ipc --any-display -p /usr/share/subcult/shell call subcult.altswitch"
         active = "hyprctl -i 0 activewindow | head -1"
+        # seen WINDOW: until the shell's history has it first, its state in $s.
+        # focus WINDOW: until Hyprland has it focused, the focused one in $f.
+        waits = (
+            " seen() { a=${1#Window }; a=${a%% *}; for i in $(seq 40); do s=$(" + alt + " state);"
+            " case \"$s\" in *\"$a\"*) return;; esac; sleep 0.25; done; };"
+            " focus() { for i in $(seq 40); do f=$(" + active + "); [ \"$f\" = \"$1\" ] && return; sleep 0.25; done; };")
         results["altswitch"] = serial.run(
-            "hyprctl -i 0 dispatch 'hl.dsp.exec_cmd(\"kitty\")' >/dev/null;"
+            waits + " hyprctl -i 0 dispatch 'hl.dsp.exec_cmd(\"kitty\")' >/dev/null;"
             " for i in $(seq 20); do [ $(hyprctl -i 0 clients | grep -c '^Window ') -ge 1 ] && break; sleep 1; done;"
             f" sleep 1; w1=$({active});"
             " hyprctl -i 0 dispatch 'hl.dsp.exec_cmd(\"kitty\")' >/dev/null;"
             " for i in $(seq 20); do [ $(hyprctl -i 0 clients | grep -c '^Window ') -ge 2 ] && break; sleep 1; done;"
             f" sleep 1; w2=$({active}); n=$(hyprctl -i 0 clients | grep -c '^Window ');"
-            f" {glob % 'next'}; {glob % 'commit'}; sleep 1; g=$({active});"
-            " o=$(hyprctl -i 0 layers | grep -c 'namespace: subcult-altswitch');"
-            f" {alt} next; sleep 0.5; {alt} commit; sleep 1; v=$({active});"
-            " echo \"N=$n\"; echo \"W1=$w1\"; echo \"W2=$w2\"; echo \"G=$g\"; echo \"O=$o\"; echo \"V=$v\";"
+            f" seen \"$w2\"; s2=$s; {glob % 'next'}; {glob % 'commit'}; focus \"$w1\"; g=$f;"
+            " for i in $(seq 20); do o=$(hyprctl -i 0 layers | grep -c 'namespace: subcult-altswitch'); [ \"$o\" = 0 ] && break; sleep 0.25; done;"
+            f" seen \"$g\"; s1=$s; [ \"$g\" = \"$w1\" ] && t=$w2 || t=$w1; {alt} next; {alt} commit; focus \"$t\"; v=$f;"
+            " echo \"N=$n\"; echo \"W1=$w1\"; echo \"W2=$w2\"; echo \"S2=$s2\"; echo \"G=$g\"; echo \"O=$o\"; echo \"S1=$s1\"; echo \"V=$v\";"
             " if [ \"$n\" -ge 2 ] && [ -n \"$w1\" ] && [ \"$w1\" != \"$w2\" ]; then"
             "   [ \"$g\" = \"$w1\" ] && [ \"$o\" = 0 ] && echo SWITCHED_GLOBAL;"
-            "   [ \"$v\" = \"$w2\" ] && echo SWITCHED_IPC;"
+            "   [ \"$v\" = \"$t\" ] && echo SWITCHED_IPC;"
             " fi;"
             " for i in 1 2; do hyprctl -i 0 dispatch 'hl.dsp.window.close()' >/dev/null; sleep 1; done", timeout=180)
         # On battery: UPower replaced by python-dbusmock's template with
@@ -1264,6 +1273,8 @@ finally:
         print(f"install-test: {'ok  ' if ok else 'FAIL'} {name}")
     if not {"SWITCHED_GLOBAL", "SWITCHED_IPC"} <= set(r["altswitch"].splitlines()):
         print("install-test: Alt-Tab:\n" + r["altswitch"].strip())
+    if not checks["daily update check timer and count"]:
+        print("install-test: update check:\n" + r["update_timer"].strip())
     if "KDE_ENTRY=0" in r["app_colours"]["state"].split():
         print("install-test: app colours: this Pult has no kde entry; Dolphin was checked against the packaged scheme only")
     if not app_colours_ok(r["app_colours"]):

@@ -1047,28 +1047,33 @@ finally:
         # switch failed). Both are closed afterwards. Each switch starts once
         # the shell's focus history has the focused window first (its IPC
         # state), and the result is polled: under host load the shell can lag
-        # Hyprland by seconds.
+        # Hyprland by seconds. Windows are compared by address, as a terminal's
+        # title changes once its shell prints a prompt. Each switch has 30
+        # seconds for all its waits, which keeps the command inside its timeout.
         glob = "hyprctl -i 0 dispatch 'hl.dsp.global(\"subcult:altswitch-%s\")' >/dev/null"
         alt = "quickshell ipc --any-display -p /usr/share/subcult/shell call subcult.altswitch"
-        active = "hyprctl -i 0 activewindow | head -1"
-        # seen WINDOW: until the shell's history has it first, its state in $s.
-        # focus WINDOW: until Hyprland has it focused, the focused one in $f.
+        # cur: the focused window's address in $f, empty when none is focused.
+        # seen ADDRESS: until the shell's history has it first, its state in $s.
+        # focus ADDRESS: until Hyprland has it focused, the focused one in $f.
+        # Both try at least once and give up at $end.
         waits = (
-            " seen() { a=${1#Window }; a=${a%% *}; for i in $(seq 40); do s=$(" + alt + " state);"
-            " case \"$s\" in *\"$a\"*) return;; esac; sleep 0.25; done; };"
-            " focus() { for i in $(seq 40); do f=$(" + active + "); [ \"$f\" = \"$1\" ] && return; sleep 0.25; done; };")
+            " cur() { f=$(hyprctl -i 0 activewindow | head -1);"
+            " case \"$f\" in 'Window '*) f=${f#Window }; f=${f%% *};; *) f=;; esac; };"
+            " seen() { while :; do s=$(" + alt + " state);"
+            " case \"$s\" in *\"$1\"*) return;; esac; [ $SECONDS -ge $end ] && return; sleep 0.25; done; };"
+            " focus() { while :; do cur; [ \"$f\" = \"$1\" ] && return; [ $SECONDS -ge $end ] && return; sleep 0.25; done; };")
         results["altswitch"] = serial.run(
             waits + " hyprctl -i 0 dispatch 'hl.dsp.exec_cmd(\"kitty\")' >/dev/null;"
             " for i in $(seq 20); do [ $(hyprctl -i 0 clients | grep -c '^Window ') -ge 1 ] && break; sleep 1; done;"
-            f" sleep 1; w1=$({active});"
+            " sleep 1; cur; w1=$f;"
             " hyprctl -i 0 dispatch 'hl.dsp.exec_cmd(\"kitty\")' >/dev/null;"
             " for i in $(seq 20); do [ $(hyprctl -i 0 clients | grep -c '^Window ') -ge 2 ] && break; sleep 1; done;"
-            f" sleep 1; w2=$({active}); n=$(hyprctl -i 0 clients | grep -c '^Window ');"
-            f" seen \"$w2\"; s2=$s; {glob % 'next'}; {glob % 'commit'}; focus \"$w1\"; g=$f;"
-            " for i in $(seq 20); do o=$(hyprctl -i 0 layers | grep -c 'namespace: subcult-altswitch'); [ \"$o\" = 0 ] && break; sleep 0.25; done;"
-            f" seen \"$g\"; s1=$s; [ \"$g\" = \"$w1\" ] && t=$w2 || t=$w1; {alt} next; {alt} commit; focus \"$t\"; v=$f;"
+            " sleep 1; cur; w2=$f; n=$(hyprctl -i 0 clients | grep -c '^Window ');"
+            f" end=$((SECONDS+30)); seen \"$w2\"; s2=$s; {glob % 'next'}; {glob % 'commit'}; focus \"$w1\"; g=$f;"
+            " while :; do o=$(hyprctl -i 0 layers | grep -c 'namespace: subcult-altswitch'); [ \"$o\" = 0 ] || [ $SECONDS -ge $end ] && break; sleep 0.25; done;"
+            f" end=$((SECONDS+30)); seen \"$g\"; s1=$s; [ \"$g\" = \"$w1\" ] && t=$w2 || t=$w1; {alt} next; {alt} commit; focus \"$t\"; v=$f;"
             " echo \"N=$n\"; echo \"W1=$w1\"; echo \"W2=$w2\"; echo \"S2=$s2\"; echo \"G=$g\"; echo \"O=$o\"; echo \"S1=$s1\"; echo \"V=$v\";"
-            " if [ \"$n\" -ge 2 ] && [ -n \"$w1\" ] && [ \"$w1\" != \"$w2\" ]; then"
+            " if [ \"$n\" -ge 2 ] && [ -n \"$w1\" ] && [ -n \"$w2\" ] && [ \"$w1\" != \"$w2\" ]; then"
             "   [ \"$g\" = \"$w1\" ] && [ \"$o\" = 0 ] && echo SWITCHED_GLOBAL;"
             "   [ \"$v\" = \"$t\" ] && echo SWITCHED_IPC;"
             " fi;"

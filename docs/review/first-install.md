@@ -18,9 +18,9 @@ logged into both systems. The installer retained Omarchy as the firmware
 default; the owner later selected Subarchy first on November 9, as recorded
 below. Subarchy is running for owner testing.
 
-**Second install, November 14:** the owner reinstalled from an image built
+**Reinstall, November 14:** the owner reinstalled from an image built
 at main `e157cc3`. Its readback, gaps and open owner checks are in
-[[#Second install on November 14]].
+[[#Reinstall on November 14]].
 
 **Latest resume result, November 9 CST:** the owner completed a fresh lid
 close/open cycle with a visible lock, working password input and no Hyprland
@@ -470,7 +470,7 @@ with `Result=success` and no restarts; no failed system or user units. The
 above this meets #213's acceptance, and the issue is closed. The crash
 restart policy of the lock stays in #230.
 
-## Second install on November 14
+## Reinstall on November 14
 
 The owner reinstalled Subarchy on the SPCC disk on November 14, 2026 from an
 ISO built at main `e157cc3`, SHA-256
@@ -496,8 +496,14 @@ Limine 12.9.6 started `/EFI/Linux/subarchy_linux-zen.efi`, entry
 `Subarchy.linux-zen`, from the new 4 GiB ESP (PARTUUID
 `32e6caf8-49b4-4355-9f55-1ce2a9f9f358`, 976 MiB used). `efibootmgr`:
 `BootCurrent: 0007`, order `0007,0002,0000,0006,0004,0001,0003`. The
-installer put `0007` first and removed `0005`, the entry of an earlier
-install whose ESP no longer exists. Both `0002` (Omarchy) and `0007`
+installer put `0007` first and removed `0005` "Limine", which pointed at
+ESP `ce2275ae-…` (the `efibootmgr` listing in
+`/var/log/subarchy-install.log`). That ESP is neither the November 9 one
+(`d5d15d48-…`, whose entry `0005` was labelled "Subarchy (SPCC)") nor
+today's, so at least one more install ran on the SPCC disk between November 9
+and today; how many is for the owner to say. The firmware fallback `0004`
+also pointed at `ce2275ae-…` before the install and now points at today's
+ESP. Both `0002` (Omarchy) and `0007`
 (Subarchy) are labelled `Limine`, so the F12 menu shows the same name twice.
 `0003` "Linux Firmware Updater" still points at the first install's ESP
 `d5d15d48-…`, which is gone; the installer only prunes entries named Limine
@@ -506,18 +512,21 @@ or Subarchy.
 **Boot time (checklist F2).** `systemd-analyze`: firmware 6.411 s + loader
 10.036 s + kernel 0.900 s + initrd 15.349 s + userspace 5.036 s = 37.735 s;
 `graphical.target` after 4.350 s of userspace. In
-`journalctl -b -o short-monotonic`, Plymouth starts 1.06 s after the kernel,
-the NVIDIA modules load in the initrd from 2.39 to 2.70 s, and the passphrase
-request reaches Plymouth at 2.73 s. The disk unlocked at 13.9 s, so most of
-the initrd time is passphrase entry. Less than 3 s passes between kernel
-start and the prompt; the rest of the black gap falls in the 10 s loader
+`journalctl -b -o short-monotonic`, Plymouth starts 1.06 s after the kernel.
+"Load Kernel Modules" runs from 0.98 to 2.70 s: NVIDIA module insertion
+starts at 1.04 s (`nvidia: loading out-of-tree module taints kernel`) and
+ends with `nvidia_drm` at 2.70 s. Root cryptsetup starts at 2.71 s, right
+after it finishes, and the passphrase request reaches Plymouth at 2.73 s. So
+about 1.7 s of the 2.73 s between kernel start and the prompt is the NVIDIA
+modules in the initrd. The disk unlocked at 13.9 s, so most of the initrd
+time is passphrase entry. The rest of the black gap falls in the 10 s loader
 phase, which also covers Limine's 3 s menu timeout. The NVIDIA modules make
-the UKI larger and may still matter there; `/boot/EFI/Linux/` is root-only
-and its sizes were not read. The gap itself needs a stopwatch, so F2 stays
+the UKI larger and may add to that phase too; `/boot/EFI/Linux/` is
+root-only and its sizes were not read. The gap itself needs a stopwatch, so F2 stays
 open. `systemd-analyze blame` is led by device units at 15.7 s (TPM, serial
 ports) that wait for the unlock; the slowest services were `fwupd` 2.213 s,
-`subcult-ufw-docker` 1.654 s, `ldconfig` 1.145 s (first boot after an
-update), `thermald` 0.858 s and `intel_lpmd` 0.780 s. The critical chain
+`subcult-ufw-docker` 1.654 s, `ldconfig` 1.145 s (first boot after the
+install), `thermald` 0.858 s and `intel_lpmd` 0.780 s. The critical chain
 runs through `subcult-ufw-docker` and `power-profiles-daemon`.
 
 **Units and journal.** `systemctl --failed` and `systemctl --user --failed`
@@ -660,5 +669,7 @@ Matching #51's list, with the [[test-checklist|checklist]] items:
 - Secure Boot (F12) and TPM unlock (F13, F14).
 - The DisplayLink dock (M2–M5), after its drivers are installed.
 - The shell, lock and greeter at scale 1.6 (M1, F10).
+- How many installs ran on the SPCC disk between November 9 and today (one
+  left ESP `ce2275ae-…`).
 
 Related: [[0049-installer|ADR 0049]] · [[0050-hardware-support|Hardware support]] · [[package-publishing|Package publishing]] · [[roadmap|Roadmap]] · [[review-index|Review index]]

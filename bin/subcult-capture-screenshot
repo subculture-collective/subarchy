@@ -22,7 +22,7 @@ out=${XDG_PICTURES_DIR:-$HOME/Pictures}
 mkdir -p -- "$out"
 
 sel=$(subcult-capture-region "${1:-region}") || exit 0
-file=$out/screenshot-$(date +%Y-%m-%d_%H-%M-%S).png
+file=$out/screenshot-$(date +%Y-%m-%d_%H-%M-%S-%3N).png
 grim -g "$sel" "$file"
 wl-copy --type image/png <"$file"
 echo "$file"

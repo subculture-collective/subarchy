@@ -63,8 +63,11 @@ no process. The names are `launcher-toggle`, `clipboard`, `alias.<name>`, `altsw
 IPC: `quickshell ipc -p /usr/share/subcult/shell show` lists the targets
 (`subcult.shell status`, `subcult.osd flash <volume|brightness|capslock|workspace>`,
 `subcult.altswitch next|prev|commit|cancel`,
-`subcult.launcher open|close|toggle|clearHistory|search <query>|type <query>|enter|hotkey <alias>|state`).
-Tests and scripts use it; the key bindings do not.
+`subcult.launcher open|close|toggle|clearHistory|search <query>|type <query>|enter|hotkey <alias>|state`,
+`subcult.screencasts setRecording true|false`).
+Tests and scripts use it. The key bindings do not, except through
+`subcult capture recording` (Alt+Print), which sets the screen mark with
+`subcult.screencasts setRecording`.
 
 ## Keep-awake
 

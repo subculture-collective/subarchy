@@ -54,7 +54,7 @@ DOCS = [
 COMMAND_SECTIONS = [
     ("System and updates", "system", ["update", "channel", "system", "lock", "idle", "power"]),
     ("Look", "look", ["theme", "font", "cursor", "display", "screensaver"]),
-    ("Apps", "apps", ["app", "clipboard", "calendar", "agent"]),
+    ("Apps", "apps", ["app", "capture", "clipboard", "calendar", "agent"]),
     ("Hardware", "hardware", ["hw", "gpu", "thermal", "disk", "secureboot", "setup", "dell", "ht3"]),
     ("Services", "services", ["docker", "tailscale", "shell"]),
 ]

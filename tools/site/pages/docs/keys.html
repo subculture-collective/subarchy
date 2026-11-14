@@ -2,7 +2,7 @@
 title: Keys · Subarchy docs
 h1: Keys
 nav: keys
-description: Every default Subarchy key binding in one chart: apps, windows, workspaces, mouse, media and system keys, and the launcher's prefixes.
+description: Every default Subarchy key binding in one chart: apps, windows, workspaces, mouse, capture, media and system keys, and the launcher's prefixes.
 -->
 <p class="lede">{{Super}} is the Windows or Command key. The bindings live in <code>default/hypr/bindings.lua</code>; add your own in <code>~/.config/hypr/hyprland.lua</code>.</p>
 
@@ -40,6 +40,16 @@ description: Every default Subarchy key binding in one chart: apps, windows, wor
 <tr><th scope="row">{{Super+_left drag_}}</th><td>Move a window</td></tr>
 <tr><th scope="row">{{Super+_right drag_}}</th><td>Resize a window</td></tr>
 </tbody></table></section>
+
+<section class="chart" aria-labelledby="capture"><h2 id="capture">Capture</h2>
+<table><caption class="sr">Screenshot and recording keys</caption><tbody>
+<tr><th scope="row">{{Print}}</th><td>Screenshot: drag a region, or click a window or display</td></tr>
+<tr><th scope="row">{{Shift+Print}}</th><td>Screenshot of a window</td></tr>
+<tr><th scope="row">{{Ctrl+Print}}</th><td>Screenshot of the display</td></tr>
+<tr><th scope="row">{{Alt+Print}}</th><td>Start or stop a screen recording</td></tr>
+<tr><th scope="row">{{Alt+Shift+Print}}</th><td>The same, with desktop and microphone audio</td></tr>
+</tbody></table>
+<p class="muted small">Screenshots go to Pictures and the clipboard; click the notification to annotate. Recordings go to Videos.</p></section>
 
 <section class="chart" aria-labelledby="system"><h2 id="system">System</h2>
 <table><caption class="sr">System keys</caption><tbody>

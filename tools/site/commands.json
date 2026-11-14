@@ -140,6 +140,30 @@
    "dangerous": false
   },
   {
+   "route": "subcult capture recording",
+   "group": "capture",
+   "args": "[--audio]",
+   "summary": "Start or stop a screen recording to the Videos folder",
+   "examples": [
+    "subcult capture recording",
+    "subcult capture recording --audio"
+   ],
+   "requires_sudo": false,
+   "dangerous": false
+  },
+  {
+   "route": "subcult capture screenshot",
+   "group": "capture",
+   "args": "[region|window|output]",
+   "summary": "Take a screenshot to the Pictures folder and the clipboard",
+   "examples": [
+    "subcult capture screenshot",
+    "subcult capture screenshot output"
+   ],
+   "requires_sudo": false,
+   "dangerous": false
+  },
+  {
    "route": "subcult channel",
    "group": "channel",
    "args": "",

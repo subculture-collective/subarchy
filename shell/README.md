@@ -103,7 +103,10 @@ wlr-screencopy) makes no PipeWire stream; Hyprland's `screencast` events
 light the screen mark for it, from the first frames until half a second
 after the last. The count is kept for the whole shell, so a bar added
 later (a monitor plugged in, a reloaded widget) shows it too; a capture
-already running when the shell starts is missed.
+already running when the shell starts is missed. gpu-screen-recorder reads
+the screen through KMS, which neither PipeWire nor Hyprland sees, so
+`subcult capture recording` (Alt+Print) sets the mark over IPC
+(`subcult.screencasts setRecording`) while it records.
 ## Motion
 
 One setting, `~/.config/subcult/motion.json` with `{"mode": "auto"}`, `"on"`

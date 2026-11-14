@@ -85,8 +85,10 @@ smoke: build
 	tools/test/fingerprint-setup-test.sh
 	tools/test/migration-taildrop-test.sh
 	tools/test/migration-linecast-test.sh
+	tools/test/migration-hostname-test.sh
 	tools/test/tailscale-helper-test.sh
 	tools/test/taildrop-test.sh
+	tools/test/capture-test.sh
 	tools/test/docker-tui-test.sh
 	tools/test/installer-check-test.sh
 	tools/test/gpu-test.sh
@@ -108,7 +110,8 @@ docs-check:
 	python3 tools/test/palette-test.py
 	python3 tools/test/apps-preinstalled-test.py
 	python3 tools/theme/gen-palette.py --check
-	python3 -m py_compile tools/inventory/collect.py tools/obsidian/check-vault.py tools/obsidian/install-plugins.py tools/iso/boot-test.py tools/iso/install-test.py tools/iso/vmlib.py tools/test/palette-test.py tools/test/test_install_checks.py tools/theme/gen-palette.py tools/portal/file-chooser.py tools/test/apps-preinstalled-test.py
+	python3 tools/test/site-check.py
+	python3 -m py_compile tools/inventory/collect.py tools/obsidian/check-vault.py tools/obsidian/install-plugins.py tools/iso/boot-test.py tools/iso/install-test.py tools/iso/vmlib.py tools/test/palette-test.py tools/test/test_install_checks.py tools/theme/gen-palette.py tools/portal/file-chooser.py tools/test/apps-preinstalled-test.py tools/test/site-check.py
 
 # Checks the Hyprland Lua defaults where Hyprland is installed; CI runs it in
 # the Arch package job.

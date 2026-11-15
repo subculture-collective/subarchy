@@ -976,10 +976,13 @@ ts() { HOME=$home1 quickshell ipc -p "$shell" call subcult.tailscale "$@"; }
 tsfail() { fail "$1: state $(ts state 2>&1); tailscale calls: $(tr '\n' ';' <"$home1/tailscale-log" 2>/dev/null)"; }
 for _ in $(seq 20); do [[ $(ts state) == *'"state":"NeedsLogin"'* ]] && break; sleep 0.5; done
 [[ $(ts state) == *'"state":"NeedsLogin"'* ]] || tsfail "tailscale signed out not reported"
+# The bar needs status, not the saved-account list used only by its panel.
+! grep -qx 'switch --list --json' "$home1/tailscale-log" || tsfail "the closed Tailscale panel read saved accounts"
 HOME=$home1 quickshell ipc -p "$shell" call subcult.shell panel subcult.tailscale >/dev/null
 sleep 1
 st=$(status "$home1")
 [[ $(json 'd.get("panel")') == subcult.tailscale ]] || fail "the tailscale panel did not open: $st"
+grep -qx 'switch --list --json' "$home1/tailscale-log" || tsfail "opening the Tailscale panel did not read saved accounts"
 ts signIn >/dev/null
 for _ in $(seq 20); do [[ $(ts state) == *'"loginUrl":"https://login.tailscale.com/a/headless"'* ]] && break; sleep 0.5; done
 [[ $(ts state) == *'"loginUrl":"https://login.tailscale.com/a/headless"'* ]] || tsfail "no sign-in link from the helper"

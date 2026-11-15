@@ -19,14 +19,14 @@ BarWidget {
   hidden: !Tailscale.installed
   implicitWidth: button.implicitWidth
 
-  Component.onCompleted: Tailscale.refresh()
+  Component.onCompleted: Tailscale.readStatus()
 
   WidgetTimer {
     widget: root
     timerName: "refresh"
     running: true
     repeat: true
-    onTriggered: Tailscale.refresh()
+    onTriggered: Tailscale.readStatus()
   }
 
   IconButton {

@@ -134,4 +134,18 @@ be drawn by the lock screen, which hyprlock cannot do.
   responses, missing/crashed helpers, cancellation and immediate retry.
   Physical fingerprint acceptance remains pending on #93.
 
+- 2026-11-15 UTC, Kvant: an offline-installed, encrypted Subarchy VM with
+  Linux-PAM 1.7.3 and Quickshell 0.3.2 passed 21 assertions against the
+  candidate lock. The helper ran as the installed user (uid 1000), without
+  setuid, and the password PAM policy matched the shipped file. A wrong
+  password kept the session locked and retained text typed during the
+  check for a retry without a click. Escape cancelled an active real-PAM
+  check; an immediate correct retry unlocked and reaped the old helper.
+  Killing a helper kept the session locked, and a correct retry recovered.
+  The probe also caught a prompt-ordering regression: responding cleared
+  `responseRequired` before the lock classified the PAM message, so
+  `Password:` became the retry error. Classifying the message first fixes
+  it; the graphical regression test now asks for a response before
+  refusing, and checks the retry message.
+
 Related: [[decision-map|Decision map]] · [[0034-shell-toolkit|ADR 0034]] · [[0035-plugin-api|ADR 0035]]

@@ -334,13 +334,12 @@ ShellRoot {
     id: auth
     config: root.pamConfig
     configDirectory: root.pamDir
-    onResponseRequiredChanged: {
-      root.traceAuth("password", "response-required")
+    onResponseRequiredChanged: root.traceAuth("password", "response-required")
+    onPamMessage: {
+      // Classify prompts before respond() clears responseRequired.
       if (responseRequired)
         auth.respond(root.lockState.password)
-    }
-    onPamMessage: {
-      if (!responseRequired)
+      else
         root.lockState = Model.pamMessage(root.lockState, message)
     }
     onCompleted: (result) => {

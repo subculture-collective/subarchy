@@ -247,7 +247,7 @@ ShellRoot {
     }
   }
 
-  PamContext {
+  PamSession {
     id: fingerprintAuth
     config: root.fingerprintConfig
     configDirectory: root.pamDir
@@ -330,7 +330,7 @@ ShellRoot {
     }
   }
 
-  PamContext {
+  PamSession {
     id: auth
     config: root.pamConfig
     configDirectory: root.pamDir

@@ -13,6 +13,7 @@ set -euo pipefail
 
 src=$(realpath "${1:?path to the shell folder}")
 root=$(git rev-parse --show-toplevel)
+export SUBCULT_LOCK_PAM_HELPER="$root/tools/lock/pam-helper.py"
 fail() { # the message, then the shell log's last warnings when it exists
   echo "shell-headless: $*" >&2
   [[ -f ${work:-}/qs1.log ]] && tail -n 30 "$work/qs1.log" | cut -c1-300 >&2

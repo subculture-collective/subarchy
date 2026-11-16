@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Upload immutable packages from a main CI run; Gitea signs what it serves."""
 
+import http.client
 import io
 import os
 from pathlib import Path
@@ -54,7 +55,7 @@ def published(channel):
                 return set()  # no database before the channel's first upload
             if not transient(error):
                 raise RuntimeError(f"registry lookup returned HTTP {error.code}") from None
-        except (urllib.error.URLError, TimeoutError, ConnectionError):
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
             pass
         retry(f"registry lookup for {channel}", attempt)
     with tarfile.open(fileobj=io.BytesIO(data)) as database:
@@ -104,7 +105,7 @@ def publish(package, channel, token, listed):
                 ) from None
             if not transient(error):
                 raise RuntimeError(f"upload returned HTTP {error.code} for {package.name}") from None
-        except (urllib.error.URLError, TimeoutError, ConnectionError):
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
             pass
         # A lost response does not prove the server rejected the upload.
         # Resolve the exact immutable version before deciding to resend it.

@@ -2,6 +2,7 @@
 """Publishing safety and retry behavior, without registry writes."""
 
 import importlib.util
+import http.client
 import io
 import os
 from pathlib import Path
@@ -77,6 +78,30 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(request.call_count, 2)
         self.assertTrue(all(call.args[0].method == "GET" for call in request.call_args_list))
 
+    def test_lookup_recovers_from_truncated_http_response(self):
+        class Socket:
+            def makefile(self, *args):
+                return io.BytesIO(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\ntruncated")
+        truncated = http.client.HTTPResponse(Socket())
+        truncated.begin()
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = database("new-1.0-1")
+        with patch.object(publisher.urllib.request, "urlopen", side_effect=[truncated, response]) as request, patch.object(
+            publisher.time, "sleep",
+        ):
+            self.assertEqual(publisher.published("stable"), {"new-1.0-1"})
+        self.assertEqual(request.call_count, 2)
+        self.assertTrue(truncated.isclosed())
+
+    def test_repeated_incomplete_reads_stop_without_echoing_body(self):
+        with patch.object(publisher.urllib.request, "urlopen", side_effect=http.client.IncompleteRead(
+            b"sensitive body marker", 100,
+        )) as request, patch.object(publisher.time, "sleep"):
+            with self.assertRaisesRegex(RuntimeError, "lookup.*3 attempts") as error:
+                publisher.published("stable")
+            self.assertEqual(request.call_count, 3)
+            self.assertNotIn("sensitive body marker", str(error.exception))
+
     def test_lookup_stops_after_repeated_transient_failures(self):
         for error in (urllib.error.URLError("unavailable"),
                       urllib.error.HTTPError("https://example.test", 503, "unavailable", {}, None)):
@@ -97,6 +122,17 @@ class PublishTests(unittest.TestCase):
                 publisher.publish(package, "stable", "test-token", set())
             lookup.assert_called_once_with("stable")
             self.assertEqual(request.call_count, 1, "a committed version must not be resent")
+
+    def test_interrupted_http_status_line_checks_for_a_committed_upload(self):
+        with tempfile.TemporaryDirectory() as temp:
+            package = Path(temp) / "new-1.0-1-any.pkg.tar.zst"
+            package.write_bytes(b"package bytes")
+            with patch.object(publisher.urllib.request, "urlopen", side_effect=http.client.BadStatusLine(
+                "truncated status marker",
+            )) as request, patch.object(publisher, "published", return_value={"new-1.0-1"}) as lookup:
+                publisher.publish(package, "stable", "test-token", set())
+            lookup.assert_called_once_with("stable")
+            self.assertEqual(request.call_count, 1)
 
     def test_upload_retry_opens_a_fresh_complete_stream(self):
         with tempfile.TemporaryDirectory() as temp:

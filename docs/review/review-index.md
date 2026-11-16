@@ -3,7 +3,7 @@ title: "Review"
 type: index
 status: active
 created: 2026-11-06
-updated: 2026-11-13
+updated: 2026-11-16
 tags: [index, review]
 aliases: [Review checklist]
 ---
@@ -23,6 +23,7 @@ review can be a yes/no pass.
 | [[next-decisions\|Next decisions]] | Everything still open: new decisions, design work, assumptions, questions |
 | [[first-install\|First install on sputnik]] | Runbook for the first real install, and what is and is not tested |
 | [[test-checklist\|Hardware test checklist]] | What the owner tests by hand on sputnik, and the decisions still open before release |
+| [[shell-display-findings\|Shell and display finding acceptance]] | #98 evidence, remaining physical-monitor check and the parent's next frame-attribution probe |
 
 ## How to review
 

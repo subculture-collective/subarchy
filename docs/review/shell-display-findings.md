@@ -100,9 +100,15 @@ systemctl --user stop subcult-shell.service
 systemd-inhibit --what=idle:sleep --mode=block \
   timeout --signal=INT 400s quickshell --no-color --log-times \
   -p "$probe/shell" >"$probe/frames.log" 2>&1
-# timeout's 124 is expected. Keep the directory and logs for comparison.
+probe_status=$?
+date +%s%3N >"$probe/finished-ms"
 restore_shell
 trap - EXIT
+# A shell crash must not become five apparently quiet minutes.
+if [ "$probe_status" -ne 124 ]; then
+  printf 'Probe ended early (status %s); inspect frames.log.\n' "$probe_status" >&2
+  exit 1
+fi
 printf '%s\n' "$probe"
 ```
 
@@ -112,7 +118,7 @@ desktop during the recording. Summarize every interval, rather than choosing
 the quietest frame minute:
 
 ```bash
-python3 - "$probe/frames.log" <<'PY'
+python3 - "$probe/frames.log" "$probe/finished-ms" <<'PY'
 import json
 import sys
 from collections import Counter
@@ -126,6 +132,9 @@ for line in Path(sys.argv[1]).read_text().splitlines():
 if not events:
     raise SystemExit("No probe events: check shell startup before interpreting counts")
 start = min(e["at"] for e in events) + 90_000
+finished = int(Path(sys.argv[2]).read_text())
+if finished < start + 300_000:
+    raise SystemExit("Recording is too short for five complete minutes after warm-up")
 counts = Counter((e["output"], (e["at"] - start) // 60_000, e["event"])
                  for e in events if start <= e["at"] < start + 300_000)
 print("output minute clock_notifications frame_swaps")

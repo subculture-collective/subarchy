@@ -130,6 +130,7 @@ func TestPlanIdenticalMonitorsFollowSerialAcrossConnectorSwap(t *testing.T) {
 	if err != nil || !strings.Contains(string(raw), `"serial":"portrait"`) {
 		t.Fatalf("capture must retain the hardware serial: %s, %v", raw, err)
 	}
+	p = Profile{}
 	if err := json.Unmarshal(raw, &p); err != nil {
 		t.Fatal(err)
 	}

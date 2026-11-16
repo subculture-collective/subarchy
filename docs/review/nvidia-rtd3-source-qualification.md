@@ -228,7 +228,6 @@ Before offering that candidate for Sputnik testing:
 The current blocker is an exact-target, fully built and qualified driver
 candidate, followed by the owner's physical battery test. PR #1512 is still
 unmerged, and no such candidate was built or installed in this investigation.
-The parent's latest core616 Zen readback was on AC with powered USB online;
-its active GPU and zero suspended time are not a new battery test.
+A readback with AC or powered USB online does not replace that battery test.
 
 Related: [[0006-gpu-drivers|ADR 0006]] · [[0004-kernel|ADR 0004]] · [[first-install]] · [[test-checklist]] · [[review-index]]

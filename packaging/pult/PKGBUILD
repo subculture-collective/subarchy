@@ -2,7 +2,7 @@
 # Pult (ADR 0037, issues #77 and #78), applied at install and through `pult`.
 # Upstream's two app-target commits after v0.4.1 (Pult PRs #37 and #38).
 # Keep this snapshot pinned until a release includes VS Code and Obsidian.
-# Code is GPL-3.0-only; templates and registry are MIT.
+# Code is GPL-3.0-only; templates and registry are MIT; HuJSON is BSD-3-Clause.
 pkgname=pult
 pkgver=0.4.1.r2.g7a703f1
 _commit=7a703f18d2a934d5c4821c24a723c0ad4863417d
@@ -11,7 +11,7 @@ pkgrel=1
 pkgdesc='Apply one palette across your terminal apps, and undo every change'
 arch=('x86_64' 'aarch64')
 url='https://git.subcult.tv/subculture-collective/pult'
-license=('GPL-3.0-only' 'MIT')
+license=('GPL-3.0-only' 'MIT' 'BSD-3-Clause')
 makedepends=('go' 'python')
 source=("pult-${_commit}.tar.gz::https://api.github.com/repos/subculture-collective/pult/tarball/${_commit}"
         "https://git.subcult.tv/subculture-collective/pult/releases/download/v0.4.1/pult-0.4.1-catalog.db.zst")
@@ -38,5 +38,6 @@ package() {
   install -Dm755 pult "$pkgdir/usr/bin/pult"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 LICENSES/MIT.txt "$pkgdir/usr/share/licenses/$pkgname/MIT.txt"
+  install -Dm644 LICENSES/HuJSON-BSD-3-Clause.txt "$pkgdir/usr/share/licenses/$pkgname/HuJSON-BSD-3-Clause.txt"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

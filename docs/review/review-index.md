@@ -3,7 +3,7 @@ title: "Review"
 type: index
 status: active
 created: 2026-11-06
-updated: 2026-11-13
+updated: 2026-11-16
 tags: [index, review]
 aliases: [Review checklist]
 ---
@@ -22,6 +22,7 @@ review can be a yes/no pass.
 | [[rice-port-review\|Rice port review]] | Which SUBCULT rice features to port, rethink or skip |
 | [[next-decisions\|Next decisions]] | Everything still open: new decisions, design work, assumptions, questions |
 | [[first-install\|First install on sputnik]] | Runbook for the first real install, and what is and is not tested |
+| [[nvidia-rtd3-source-qualification\|NVIDIA RTD3 source qualification]] | Reproduce #1512's source applicability check and qualify a candidate before the remaining Zen battery test |
 | [[test-checklist\|Hardware test checklist]] | What the owner tests by hand on sputnik, and the decisions still open before release |
 
 ## How to review

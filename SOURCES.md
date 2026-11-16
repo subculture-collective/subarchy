@@ -12,7 +12,7 @@ checks. An anonymous link check establishes access, not a new byte audit.
 | Core `0.0.0-636` | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/subarchy-0.0.0-636-x86_64.pkg.tar.zst) | [Core recipe at actual build revision `8d06f86`](https://github.com/subculture-collective/subarchy/blob/8d06f8618f41d9740ecf25536790b1aeb6ae9e6a/packaging/subarchy/PKGBUILD); [complete checkout](https://github.com/subculture-collective/subarchy/archive/8d06f8618f41d9740ecf25536790b1aeb6ae9e6a.tar.gz) |
 | Pult `0.4.1.r2.g7a703f1-2` | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/pult-0.4.1.r2.g7a703f1-2-x86_64.pkg.tar.zst) | [Recipe directory at `8d06f86`](https://github.com/subculture-collective/subarchy/tree/8d06f8618f41d9740ecf25536790b1aeb6ae9e6a/packaging/pult) |
 | yay `13.1.0-2` (historical notice bundle) | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/yay-13.1.0-2-x86_64.pkg.tar.zst) | [Recipe directory at `8d06f86`](https://github.com/subculture-collective/subarchy/tree/8d06f8618f41d9740ecf25536790b1aeb6ae9e6a/packaging/aur/yay) |
-| yay `13.1.0-3` (BSON notice repair) | Build and signed stable/edge publication pending; no new binary hash claimed | [Recipe directory at `475322d`](https://github.com/subculture-collective/subarchy/tree/475322dd97626d510a25cebc432acd9045a615a6/packaging/aur/yay); [complete checkout with helpers](https://github.com/subculture-collective/subarchy/archive/475322dd97626d510a25cebc432acd9045a615a6.tar.gz) |
+| yay `13.1.0-3` (BSON notice repair) | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/yay-13.1.0-3-x86_64.pkg.tar.zst) | [Recipe directory at `475322d`](https://github.com/subculture-collective/subarchy/tree/475322dd97626d510a25cebc432acd9045a615a6/packaging/aur/yay); [complete checkout with helpers](https://github.com/subculture-collective/subarchy/archive/475322dd97626d510a25cebc432acd9045a615a6.tar.gz) |
 | cliamp `2.4.1-2` | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/cliamp-2.4.1-2-x86_64.pkg.tar.zst) | [Recipe directory at `8d06f86`](https://github.com/subculture-collective/subarchy/tree/8d06f8618f41d9740ecf25536790b1aeb6ae9e6a/packaging/aur/cliamp) |
 
 The same published versions are also served from `arch/edge/x86_64` in place
@@ -25,6 +25,7 @@ and the channel's signed `subarchy.db` to verify downloads.
 | `subarchy-0.0.0-636-x86_64.pkg.tar.zst` (29,737,587 bytes) | `f11af33f4c1cda74126e65071a401063c8d8e30019fbb9a3f6e4b85432c7425c` |
 | `pult-0.4.1.r2.g7a703f1-2-x86_64.pkg.tar.zst` | `1d8e11db38f766e905774866a136d59069c89f95f74e39577d49879bc31b3bdc` |
 | `yay-13.1.0-2-x86_64.pkg.tar.zst` | `680b53ef62f293e8a7bf4aec52578972f4cb001e116978b530991edf379d3c63` |
+| `yay-13.1.0-3-x86_64.pkg.tar.zst` (4,981,659 bytes) | `d66f9266809f045b75d2fe2bc2687102ca50b6375d91e562b6f58878fa63f597` |
 | `cliamp-2.4.1-2-x86_64.pkg.tar.zst` | `501151f3e46d6bbd2e35fac288b45022b64415be16935fb4adc36b43101188a8` |
 
 ### Core: select the actual build revision
@@ -148,9 +149,14 @@ describe the combined executable's terms.
 
 These directions use the existing source servers beside the binary links
 ([GNU guidance](https://www.gnu.org/licenses/gpl-faq.html#SourceAndBinaryOnDifferentSites)).
-They cover the named package versions. Yay -3's real build, signed
-publication and archive readback in both channels remain pending under
-[#247](https://github.com/subculture-collective/subarchy/issues/247).
+They cover the named package versions. Yay -3 was built with normal makepkg
+from the unchanged recipe and notice inputs at `475322d`, using Arch snapshot
+`2026/11/15`. On 2026-11-16, both stable and edge signed database entries and
+package signatures verified against the tracked registry key, and public
+downloads matched the size and SHA-256 above. The archive retained the exact
+BSON notice and copied-origin attribution with regular, root-owned 0644
+licence files. [#247](https://github.com/subculture-collective/subarchy/issues/247)
+records that bounded package/source qualification.
 The later core build/source binding and final ISO notice placement remain
 under [#241](https://github.com/subculture-collective/subarchy/issues/241)
 and [#84](https://github.com/subculture-collective/subarchy/issues/84).

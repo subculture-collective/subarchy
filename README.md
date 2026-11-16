@@ -87,7 +87,7 @@ build-environment retrieval directions alongside the downloads.
 |---|---|---|
 | Core `0.0.0-636` | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/subarchy-0.0.0-636-x86_64.pkg.tar.zst) | [Actual build revision and inputs](SOURCES.md#core-select-the-actual-build-revision) |
 | Pult `0.4.1.r2.g7a703f1-2` | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/pult-0.4.1.r2.g7a703f1-2-x86_64.pkg.tar.zst) | [Recipe, upstream and catalogue](SOURCES.md#application-source-and-extra-inputs) |
-| yay `13.1.0-2` (historical) | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/yay-13.1.0-2-x86_64.pkg.tar.zst) | [Sources and pending -3 BSON notice repair](SOURCES.md#downloads-and-recipe-revisions) |
+| yay `13.1.0-3` | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/yay-13.1.0-3-x86_64.pkg.tar.zst) | [Sources and BSON notice provenance](SOURCES.md#downloads-and-recipe-revisions) |
 | cliamp `2.4.1-2` | [Download](https://git.subcult.tv/api/packages/subculture-collective/arch/stable/x86_64/cliamp-2.4.1-2-x86_64.pkg.tar.zst) | [Recipe and upstream](SOURCES.md#application-source-and-extra-inputs), [combined GPL3 terms](SOURCES.md#distribution-terms) |
 
 ## Configuration

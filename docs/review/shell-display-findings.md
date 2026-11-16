@@ -29,7 +29,7 @@ acceptance items. This review started from main `16475c8` on Kvant on
 | Headless inhibitor test isolation | #98 records the fix in PR #206 | No open acceptance item in #98 |
 | Idle main-thread wake-ups | PR #217 merged as `54f8e6c`. The issue's run 22912 report records all 118 installed-system checks passing: 14 main-thread / 36 all-thread wake-ups in the quietest minute; limit remains 15 | No new wake-up failure established; retain the existing gate |
 | Identical monitors across connector swaps | PR #227 merged as `60673b2`. Current tests pass for unique serials, connector swaps, empty/blank/duplicate/unmatched serial fallback and reservation before connector fallback. The added store/reload test checks mode, position, scale, rotation and workspaces when both connectors change and live enumeration reverses | M4 in [[test-checklist]]: re-save the profile and record the physical panels' reported serials and reconnect result. Blank or duplicate serials cannot identify the physical panel; this remains a documented limit, not a hardware pass |
-| About five extra rendered frames per minute | Historical observation in #98; neither the passing wake-up gate nor PR #217 attributes those frames. A native headless check exercises the frame probe below | Repeat in a controlled Hyprland guest, then attribute unexpected frames. No finding-specific frame count or widget cause is established yet |
+| About five extra rendered frames per minute | Historical observation in #98; neither the passing wake-up gate nor PR #217 attributes those frames. A native headless control below recorded one clock notification and one frame in 60 seconds | Repeat in a controlled Hyprland guest, then attribute unexpected frames. The historical guest's frame count and widget cause remain unverified |
 
 The first seven rows carry the issue's completed status; this review does
 not claim a new hardware or account test for them. No remaining monitor
@@ -61,6 +61,17 @@ cannot settle the earlier idle-VM observation. The QML profiler attach
 command below was also checked with a small native offscreen application;
 it produced a nonempty Qt trace and exited successfully. This validates
 the collection mechanism, not frame attribution in Subarchy.
+
+A separate native idle control on Kvant on 2026-11-16 retained the full
+default widget layout, removed the functional harness's injected probe
+widget from that layout, and sent no UI interactions. After 90 seconds of
+warm-up, one complete 60-second interval on `HEADLESS-1` recorded **one
+clock notification and one frame swap**, 2 ms apart. It used the cached
+Quickshell 0.3.2 container, headless sway/pixman, Qt's software backend,
+a two-CPU/1-GiB container limit, no network, the harness's private session
+bus and helper fixtures, and no host system bus. No extra bar frame
+reproduced in that interval. This short fixture control cannot clear the
+original Hyprland/VM finding or establish its cause.
 
 **Next integration probe belongs to the parent:** use a disposable overlay
 of the retained installed VM, with no concurrent heavy job. No rebuild is

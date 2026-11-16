@@ -17,7 +17,7 @@ ROLES = [
 SPECIALS = ["background", "foreground", "cursor", "selection_bg", "selection_fg"]
 PINNED = {
     "base": "#100B19", "mantle": "#0B0812", "crust": "#06040A", "surface0": "#1F1830",
-    "text": "#F0ECE4", "subtext1": "#DDD6E8", "subtext0": "#9A92A8", "overlay0": "#5E5570",
+    "text": "#A78BFA", "subtext1": "#DDD6E8", "subtext0": "#9A92A8", "overlay0": "#5E5570",
     "green": "#00FF88", "mauve": "#8F4BC8", "lavender": "#A78BFA", "selection_bg": "#3B2470",
 }
 
@@ -27,6 +27,9 @@ PINNED = {
 KDE_ROLES = {
     ("Colors:Window", "BackgroundNormal"): "base",
     ("Colors:Window", "ForegroundNormal"): "text",
+    ("Colors:Window", "DecorationFocus"): "green",
+    ("Colors:Window", "DecorationHover"): "teal",
+    ("Colors:Window", "ForegroundActive"): "teal",
     ("Colors:View", "BackgroundNormal"): "mantle",
     ("Colors:Button", "BackgroundNormal"): "surface0",
     ("Colors:Selection", "BackgroundNormal"): "mauve",

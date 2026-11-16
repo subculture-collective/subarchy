@@ -275,4 +275,24 @@ which Subarchy does not use.
   still needs its installed-system run. VS Code and Obsidian remain
   separate work on #78.
 
+- 2026-11-15: the owner reported nearly invisible Dolphin checkboxes.
+  On Sputnik, the installed Qt Fusion style rendered an unchecked box
+  against the default window at about 1.03:1 contrast. Breeze alone was
+  also too faint. Subarchy now installs Breeze, selects it as the Qt
+  widget style, and sets KDE's `frameContrast` to `0.65`; the GTK platform
+  theme still supplies non-KDE applications' colours and Pult still owns
+  the KDE scheme. A native widget probe and an isolated real Dolphin
+  preferences window on Sputnik confirmed visible checkbox and radio
+  outlines with the default dark palette and lavender text. These checks
+  used a private configuration and extracted, signature-verified Breeze
+  packages; the installed release image still needs its full theme test.
+
+- 2026-11-15: the owner requested more colour variation after the
+  lavender-text preview. Pult 0.4.1 gives KDE green keyboard focus and teal
+  hover/active controls, keeping blue links and purple selection. Subarchy
+  vendors that published recipe and regenerates its fallback with the
+  released binary, so an initial install and a later `pult apply` use the
+  same role mappings. A fresh Dolphin preview on Sputnik confirmed the
+  focus accent with the dark default palette.
+
 Related: [[decision-map|Decision map]] · [[0048-config-ownership|ADR 0048]] · [[brand-identity|Brand identity]] · [[0038-wallpaper|ADR 0038]] · [[0039-fonts-icons|ADR 0039]]

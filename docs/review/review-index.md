@@ -24,6 +24,7 @@ review can be a yes/no pass.
 | [[first-install\|First install on sputnik]] | Runbook for the first real install, and what is and is not tested |
 | [[test-checklist\|Hardware test checklist]] | What the owner tests by hand on sputnik, and the decisions still open before release |
 | [[shell-display-findings\|Shell and display finding acceptance]] | #98 evidence, remaining physical-monitor check and the parent's next frame-attribution probe |
+| [[pult-app-targets\|Pult application targets]] | Package checks and remaining native acceptance for swayimg, VS Code and Obsidian (#78) |
 
 ## How to review
 

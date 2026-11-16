@@ -6,6 +6,26 @@ Omarchy counterpart: `/usr/share/omarchy/install/`, including
 (optional and hardware packages). See
 [package lists](../docs/inventory/generated/omarchy-packages.md).
 
+## First-release scope
+
+The guided-installer work in [#124](https://github.com/subculture-collective/subarchy/issues/124)
+is reconciled in the [acceptance matrix](../docs/plans/guided-installer-scope.md)
+(2026-11-16). The installer erases the **whole selected disk**, creates its
+own 4 GiB EFI partition and encrypts the remaining root partition with
+LUKS2. It cannot install into free space beside another OS on the same
+disk, shrink partitions, or reuse an existing EFI partition. Same-disk
+alongside installation is deferred beyond the first release; supporting it
+needs a separate layout/EFI/free-space decision and preservation tests on a
+disk containing another OS. A separate target disk remains the supported
+layout when another OS is present. Automatic Limine chainloading of that
+other disk is still unimplemented; use the firmware boot menu.
+
+The live boot menu remains visible for 2 seconds and beeps, so its speech
+entry can be found. Boot progress stays visible until the installer starts.
+During installation the SUBCULT mark stays above a percentage bar and
+rotating tips, with L to view the log. These choices retain the accessibility
+and owner-requested layout recorded in #127, #131 and #144.
+
 ## `subarchy-setup`
 
 The guided installer on the live ISO (`cmd/subarchy-setup`). It starts by
@@ -157,8 +177,8 @@ The two Limine tools are AUR packages, and the prebuilt Neovim is Subarchy's
 own package (`packaging/subarchy-nvim`), rebuilt locally into `build/repo` by
 `packaging/aur/build.sh` (needs docker) until the Subarchy repository
 exists.
-Pult is vendored from its release PKGBUILD (`packaging/pult`) and builds
-the same way.
+Pult uses a checksum-pinned upstream source/catalog recipe (`packaging/pult`)
+and builds the same way.
 
 ## Testing
 

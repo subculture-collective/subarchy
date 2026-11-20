@@ -3,7 +3,7 @@ title: "Review"
 type: index
 status: active
 created: 2026-11-06
-updated: 2026-11-16
+updated: 2026-11-20
 tags: [index, review]
 aliases: [Review checklist]
 ---
@@ -29,6 +29,7 @@ review can be a yes/no pass.
 | [[go-application-notices\|Go application notice retention]] | #243 package retention, later xlab licence evidence, and remaining #84 source-delivery/image gates |
 
 | [[release-licence-notices\|Release licence notice audit]] | #241 notice repair, checked package bytes and remaining final-image/owner limits under #84 |
+| [[release-notes-0.0.0\|Release notes 0.0.0]] | Draft for #84 (checklist Q21): tested hardware, untested ports, limitations and what is not in the release; tag-time fields still empty |
 
 ## How to review
 

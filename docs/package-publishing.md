@@ -38,6 +38,30 @@ sets its `pkgrel` to the full checkout's Git commit count, so each main
 commit has an ordered package version. Local builds keep the checked-in
 release number. The build uses a full history checkout.
 
+`tools/ci/set-core-version.sh` sets the release number and the build
+identity before `makepkg`, in both the packages and the ISO workflow:
+
+| Build | `pkgrel` | `subcult --version` | `/etc/os-release` |
+|---|---|---|---|
+| Release, from tag `v0.0.0` | commits`.1`, e.g. `640.1` | `subcult 0.0.0` | `VERSION="0.0.0"`, `BUILD_ID=v0.0.0` |
+| Main | commits, e.g. `641` | `subcult 0.0.0+dev.641.g<commit>` | `VERSION="0.0.0+dev.641.g<commit>"`, `BUILD_ID=dev.641.g<commit>` |
+| Local `makepkg` | `1` | `subcult 0.0.0+dev` | `VERSION="0.0.0+dev"`, `BUILD_ID=dev` |
+
+`VERSION_ID` is `0.0.0` in all three. A run started by a push of tag
+`v<pkgver>` is a release build. The script refuses it when the tag names
+another version, names another commit than the checkout, or the tracked
+files differ from the tag. The `.1` makes the release a different package
+version from the main build of the same commit, which is already published
+and immutable, and sorts it between that build and the next main commit.
+The build job then reads the version back from the built package
+(`tools/ci/check-core-version.sh`).
+
+A tag push runs only the build job. It publishes nothing: the publish job
+and `publish-packages.py` accept only a push to `main`, so the tag does not
+change what either channel receives. Whether stable gets the release
+package is #260's decision. A release ISO is built by starting the iso
+workflow on the tag.
+
 Other PKGBUILDs retain their reviewed versions. Bump `pkgver` or `pkgrel`
 when changing their content. Published versions are immutable: the uploader
 leaves an existing version alone, and the builder can reuse a pinned version

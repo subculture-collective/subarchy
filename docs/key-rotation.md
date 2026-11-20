@@ -95,10 +95,12 @@ and its reminder is under [[#Package token reminder]].
    carries the new key (procedure B1). Without that period every installed
    system needs a manual step (procedure B3).
 3. **Removing a key from `subarchy-trusted` does not remove trust.**
-   `pacman-key --populate` only adds and signs keys from the `-trusted`
-   file. A key leaves a system's trust only when its fingerprint is in
+   `pacman-key --populate` imports the keys in the keyring file and
+   locally signs those listed in `-trusted`; it never removes a key or a
+   signature. A key leaves a system's trust only when its fingerprint is in
    `subarchy-revoked`, which makes `--populate` disable it, or when someone
-   deletes it by hand.
+   deletes it by hand. (Read in upstream `pacman-key.sh.in`, see
+   [[#What was checked]]; not run.)
 
 ## A. The owner's release-image key
 
@@ -216,8 +218,12 @@ This also applies if Gitea is reinstalled and generates a new key.
    can also deliver packages: through the registry (a package token or a
    Gitea account), through the host, or by intercepting HTTPS to
    `git.subcult.tv`. List the registry's packages and versions and compare
-   them with the `main` runs of `.gitea/workflows/packages.yml`. Anything
-   no run uploaded is suspect. Rotate `SUBARCHY_PACKAGE_TOKEN` in the same
+   them with the `main` runs of `.gitea/workflows/packages.yml` and with
+   the manual uploads of files over 100 MB, which no run log shows
+   ([[package-publishing#Two registry limits|why]]; today
+   `nvidia-580xx-utils`, `proton-pass-bin` and `claude-code`). Anything
+   neither accounts for is suspect; check a manual upload against the
+   package its pinned PKGBUILD builds. Rotate `SUBARCHY_PACKAGE_TOKEN` in the same
    session.
 3. **Replace the key** on the instance (mechanism from B0.2). *Breaks:*
    from this moment **no installed system can update**, because none of
@@ -266,8 +272,8 @@ gpg --show-keys --with-fingerprint registry.key
 sudo pacman-key --add registry.key
 sudo pacman-key --lsign-key <new fingerprint>
 
-# 4. Install the current keyring, which disables the revoked key, then
-#    update.
+# 4. Install the current keyring, then update. If that keyring lists the
+#    old key as revoked, installing it disables the old key.
 sudo pacman -Sy subarchy-keyring
 subcult update
 ```
@@ -330,6 +336,7 @@ Limits, as of 2026-11-20:
 | Reminder script against a stand-in `gh`; `shellcheck` and `actionlint` 1.7.12 on the workflow | 2026-11-20, Kvant | Opens one issue inside the window or when forced; none before it or when one exists; no lint findings |
 | `python3 tools/obsidian/check-vault.py` | 2026-11-20, Kvant | Passes |
 | Review: each "Observed in the repository" item read against the named file at `9e32591`; the B3 step 1 URL fetched without credentials | 2026-11-20, Kvant | Items match the files; the URL returns HTTP 200 (the repository is public) |
+| Second review: `populate_keyring` in upstream pacman's `scripts/pacman-key.sh.in` (master, fetched from gitlab.archlinux.org) read for limit 3 and for B1 step 6 and B2 step 4 | 2026-11-20, Kvant | It imports the keyring file, locally signs the `-trusted` keys and disables the `-revoked` ones; nothing removes a key. Disabling a key the system never had prints nothing and does not fail, so a fresh install of a keyring that lists only N as a key and O as revoked is not stopped by it. Read, not run, and not checked against the pacman version Subarchy ships |
 
 Everything else in this note is untested.
 

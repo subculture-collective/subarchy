@@ -380,7 +380,7 @@ func TestApplyDefault(t *testing.T) {
 		want               bool
 	}{
 		{"new Wi-Fi with the network's DNS", "802-11-wireless", homeProfile, true},
-		{"new Ethernet with a DHCP search domain", "802-3-ethernet", "no\nno\n\n\n-1\nlan\n\n", true},
+		{"new Ethernet with a search domain on the profile", "802-3-ethernet", "no\nno\n\n\n-1\nlan\n\n", true},
 		{"only IPv4 ignored", "802-11-wireless", "yes\nno\n\n\n-1\n\n\n", true},
 		{"already untrusted", "802-11-wireless", untrustedProfile, false},
 		{"trusted, network DNS", "802-11-wireless", "no\nno\n\n\n0\n~.\n~.\n", false},

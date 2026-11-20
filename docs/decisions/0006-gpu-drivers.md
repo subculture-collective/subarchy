@@ -173,8 +173,10 @@ Implementation notes:
   reported external power while on battery (#249); no common cause is
   established. A context-only backport of upstream #1512 was built for
   both kernels on 2026-11-16 and booted in a VM without an NVIDIA device;
-  it has not been installed on `sputnik`, and #1512 has a newer head since
-  2026-11-17. Details: [[nvidia-rtd3-source-qualification]]. #195 stays
+  it has not been installed on `sputnik`. #1512 has a newer head since
+  2026-11-17; a comparison recorded on #195 on 2026-11-20 found it makes
+  the same change as the candidate's patch, and no NVIDIA release carries
+  it. Details: [[nvidia-rtd3-source-qualification]]. #195 stays
   open; LTS remains the tested workaround.
 
 Related: [[decision-map|Decision map]] · [[0004-kernel|ADR 0004]] · [[0005-firmware|ADR 0005]]

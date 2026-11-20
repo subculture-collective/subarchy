@@ -833,8 +833,12 @@ SSH after the owner checked the new host key at the laptop.
 ### What the reinstall reset
 
 The install erased the SPCC disk, so the system has a new encrypted root,
-ESP and SSH host key (#195, November 16, 21:08 UTC). Results recorded on
-the earlier installations stand as dated history. They have not been
+ESP (#195, November 16, 21:08 UTC) and a new SSH host key (#51, November
+16, 20:38 UTC). Results recorded on the earlier installations stand as
+dated history. Issue numbers in this section are GitHub's; older sections
+of this note use the Gitea numbers of the time, so the suspend issue is
+#101 here and #213 above, and the Dell permission issue is #107 here and
+#226 above. They have not been
 repeated on core 638 unless the tables below say so:
 
 | Earlier result | Recorded on | State on core 638 |
@@ -845,8 +849,8 @@ repeated on core 638 unless the tables below say so:
 | HT3 noise modes, volume and battery (#153, #65) | November 14 CST | Not repeated. No Bluetooth peripheral has been paired on this install |
 | Dock layout, lid-closed bar and personal overrides | November 16, receipt 16:25 UTC, November 14 install | Not repeated. The overrides were under the erased home; no DisplayLink device was enumerated at 21:07 UTC |
 | Greeter installed-file readback | November 16, 14:35 UTC, core 634 | Not repeated on core 638 |
-| Standalone `systemctl suspend` (#213) | November 9, core 448, first install | Not repeated. Only the lid cycle has been run |
-| Dell label following plug and unplug; permission service at boot (#226) | November 9, cores 425 and 438 | Not repeated. Thresholds read 50/85 on November 17 |
+| Standalone `systemctl suspend` (#101) | November 9, core 448, first install | Not repeated. Only the lid cycle has been run |
+| Dell label following plug and unplug; permission service at boot (#107) | November 9, cores 425 and 438 | Not repeated. Thresholds read 50/85 on November 17 |
 | Omarchy recovery boot from the Crucial disk | November 8, first install | Not repeated. A Crucial firmware entry is present |
 
 That the fingerprint enrolment, Bluetooth pairings and personal display
@@ -939,10 +943,28 @@ with profile `balanced`. Hardware and versions: Dell XPS 15 9520, BIOS
 1.44.0, UPower 1.91.5-1, systemd 262.2-1. An earlier Type-C readback also
 showed a PD partner on `port2` in sink role, but it was taken before the
 owner confirmed the ports empty. Whether resume causes this is unproven,
-and no common cause with the active GPU is established. #249 is open with
-no comments as of November 20. After the owner reconnected power, AC
-online read 1 and `BAT0` read Not charging at 71% with thresholds 50/85;
-no threshold or profile was changed.
+and no common cause with the active GPU is established. After the owner
+reconnected power, AC online read 1 and `BAT0` read Not charging at 71%
+with thresholds 50/85; no threshold or profile was changed.
+
+A source diagnosis was posted on #249 on November 20
+([comment](https://github.com/subculture-collective/subarchy/issues/249#issuecomment-7033753978)).
+It is research over these same readings; no new physical test ran. What it
+records:
+
+- The four samples list the supplies without names. The name
+  `USBC000:003` comes from two other snapshots in the same session that
+  carry no timestamp.
+- The wrong value is already in the kernel's raw sysfs output for the UCSI
+  supply. UPower and `subcult-power-auto` repeat it, so the fault is at or
+  below the kernel's UCSI connector state. Whether the firmware answered
+  wrongly or the kernel missed an event is not resolved.
+- On November 15, on the earlier install and the same Zen kernel version,
+  all three UCSI supplies read offline after unplugging, twice. The lid
+  suspend of November 17 is the more likely trigger; the comment calls
+  that an inference from order, not a finding.
+- No code change is proposed. The fresh-boot, connect and post-suspend
+  controls it defines need the owner at the laptop and have not been run.
 
 ### #51 criteria on core 638
 

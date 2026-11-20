@@ -23,7 +23,8 @@ Later on November 16 a candidate was built for both kernels and booted in
 a disposable VM; see [[#Candidate builds and VM boots, November 16]]. The
 candidate has not been installed on Sputnik, and the November 17 battery
 test on the stock driver failed again on Zen. Upstream PR #1512 has a newer
-head than the one examined here.
+head than the one examined here; a comparison recorded on #195 on November
+20 found it makes the same change as the candidate's patch.
 
 This November 16 investigation on Kvant checks source applicability and
 dependencies. It does not qualify a patched driver. Keep the installed LTS
@@ -320,19 +321,48 @@ at 02:28 UTC the stock driver on core `0.0.0-638` failed P9 on Zen again
 
 ## Upstream PR #1512 has a newer head
 
-Read from the GitHub API on November 20, 2026:
+Copied from the [#195 comment of November 20, 2026](https://github.com/subculture-collective/subarchy/issues/195#issuecomment-7033748537),
+checked on Kvant at 07:51–07:53 UTC from the public GitHub API, public
+source files and the private candidate directory. Nothing was built or
+installed, and Sputnik was not contacted. Nothing was rerun to write this
+section.
+
 [PR #1512](https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1512) is
 still open and unmerged. Its head is now
-[`c66b7b8abd779011b34ea6285487f0d1f5aa1f5a`](https://github.com/NVIDIA/open-gpu-kernel-modules/commit/c66b7b8abd779011b34ea6285487f0d1f5aa1f5a),
-a single commit dated November 17, 17:11 UTC, and GitHub reports it
-mergeable and clean. The source check and the candidate above used the
-earlier head `369378dc1552ae46f7f95a598a085c0025e464b3`, which GitHub
-reported as conflicting on November 16.
+[`c66b7b8abd779011b34ea6285487f0d1f5aa1f5a`](https://github.com/NVIDIA/open-gpu-kernel-modules/commit/c66b7b8abd779011b34ea6285487f0d1f5aa1f5a):
+one commit, author date October 26, committer date November 17 at 17:11
+UTC, and GitHub reports it mergeable and clean. Its parent is
+`e6a2e01579fb`, the `620.70.06` tag. The source check and the candidate
+above used the earlier head `369378dc1552ae46f7f95a598a085c0025e464b3`,
+which sat on `ca2d03e6fafd` (`615.78.08`) and which GitHub reported as
+conflicting on November 16. The author rebased the same commit onto
+`620.70.06`.
 
-The new head has not been compared with the candidate's patch. It sits on
-a newer base, so a plain compare of the two heads lists hundreds of
-unrelated files. Before any further candidate work, diff the new commit
-against `369378dc` and repeat the source check above with the new patch
-hash. The candidate built on November 16 does not qualify the new head.
+**The candidate already carries the current fix.** The comparison found:
+
+- The added and removed lines of the old and new heads are identical. Only
+  `index` lines, hunk line numbers and three context lines differ, and
+  those three are the ones the candidate's context-only correction
+  replaced on November 16.
+- Applying the candidate patch (`039aa613…`) and the new head's diff to
+  pristine `620.70.06` gives byte-identical files: `nv-pci.c`
+  `b045946dd05faa0cad310a70b48744e55a922369c94f754eaf477153a6d8e2e6` and
+  `nvidia.Kbuild`
+  `24499e466a7a3570be5d86291fb1418c00b77c15a2f779b3578645ed7b147898`.
+  The retained candidate build trees and DKMS source hold `nv-pci.c` with
+  that hash. No module was rebuilt for the comparison.
+- No release carries the fix. The newest tag, `620.73.04` (published
+  November 18), has the same `nv-pci.c` and `nvidia.Kbuild` as `620.70.06`.
+  Arch moved to `nvidia-open-dkms 620.73.04-1` and `linux-zen 7.3.5.zen1-1`
+  on November 19 without the patch. Reports by other users that
+  `620.73.04` with #1512 reaches fine-grained RTD3 were read, not checked.
+
+The comment's advice is not to rebuild now. The candidate matches the
+driver and kernels in the pinned snapshot `2026/11/15`. Rebuild from the
+current upstream head, against the exact new headers, only if that
+snapshot advances or Sputnik's installed NVIDIA or kernel versions
+otherwise stop matching the candidate; then repeat the build, transaction
+and boot checks. The comparison changes none of the open items on #195
+listed above.
 
 Related: [[0006-gpu-drivers|ADR 0006]] · [[0004-kernel|ADR 0004]] · [[first-install]] · [[test-checklist]] · [[review-index]]

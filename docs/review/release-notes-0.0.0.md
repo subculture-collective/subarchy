@@ -90,7 +90,11 @@ Installed 2026-11-16 (owner report,
 Kernel `7.3.4-zen2-2-zen`, NVIDIA driver `620.70.06`. The last column is
 the pending owner session #275; its steps are from the runbook on
 [#51, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-7033827474),
-which that comment says had not been run.
+which that comment says had not been run. Since the hold was lifted, the
+release candidate is a later build, and Sputnik needs it installed before
+or at that session
+([#84, 2026-11-20 15:04](https://github.com/subculture-collective/subarchy/issues/84#issuecomment-7042864244));
+the rows below describe core 638 only.
 
 | Row | Result recorded | Source | Owner session #275 |
 |---|---|---|---|
@@ -132,7 +136,7 @@ They are history, not results for core `0.0.0-638`
 |---|---|---|
 | NVIDIA runtime power on battery under linux-lts `6.18.63-3-lts` | Passed: `suspended`, "Enabled (fine-grained)", video memory off, suspended time rising. Same driver and settings fail under Zen | [#195, 2026-11-15 03:42](https://github.com/subculture-collective/subarchy/issues/195#issuecomment-6888705161) |
 | HT3 headphones: three noise modes, HT3-only volume, battery percentage | Owner confirmed | [#51, 2026-11-15 03:46](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6888745945) |
-| Lid close and unlock, then standalone `systemctl suspend`, after the #229 fixes | Passed on core 438 and core 448. The first-install note records the standalone suspend; the 2026-11-09 comment records the lid cycle | [#51, 2026-11-09 23:54](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6782833850), [[first-install#Standalone suspend, November 9 evening]] |
+| Lid close and unlock, then standalone `systemctl suspend`, after the suspend fixes (Gitea PR #229 at the time; the suspend issue is GitHub #101) | Passed on core 438 and core 448. The first-install note records the standalone suspend; the 2026-11-09 comment records the lid cycle | [#51, 2026-11-09 23:54](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6782833850), [[first-install#Standalone suspend, November 9 evening]] |
 | Dock with three monitors and lid closed | Layout applied and read back from the live compositor. Physical undock, cable swaps and reopen were not observed | [#51, 2026-11-16 17:15](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6923587683) |
 
 ## Untested ports (ADR 0050)
@@ -142,10 +146,14 @@ for every vendor and area in its table, and says each port stays marked
 untested until it runs on the matching machine. The 2026-11-08 progress
 note says none had run on real hardware beyond what the VM exercises.
 
-The only matching machine is the Dell XPS 15 9520 above. Of the catalogue,
-one fix has a recorded read on it: the `nvidia-runtime-pm` settings
-(`DynamicPowerManagement=2` and `power/control=auto`) were loaded on
-2026-11-15 ([#195, 2026-11-15 01:55](https://github.com/subculture-collective/subarchy/issues/195#issuecomment-6887593155)).
+The Dell XPS 15 9520 above is the only machine that has run Subarchy. No
+cited comment records which catalogue fixes `subcult hw fixes` lists on it.
+Of the catalogue, one fix has a recorded read on it: the
+`nvidia-runtime-pm` settings (`DynamicPowerManagement=2` and
+`power/control=auto`) were loaded on core 607 on 2026-11-15
+([#195, 2026-11-15 01:55](https://github.com/subculture-collective/subarchy/issues/195#issuecomment-6887593155))
+and on core 638 on 2026-11-17
+([#51, 2026-11-17 02:40](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6936334862)).
 Loaded is not the same as working: the card still does not suspend on Zen
 (see [[#Known limitations]]). No cited comment records a hardware result
 for the other fixes, so they are untested:
@@ -154,8 +162,13 @@ for the other fixes, so they are untested:
   `brcmfmac` supplicant.
 - ASUS: ROG, ProArt P14 speakers, ExpertBook B9406, Z13 touchpad.
 - Dell: XPS 13 speaker firmware and sidecar amplifiers, XPS touchpad
-  haptics. The Dell power add-on has owner results from 2026-11-09 on an
-  earlier install (see above), not on core 638.
+  haptics. The Dell power add-on (`dell-power`, a vendor add-on rather than
+  a table entry) has owner results from the first install on 2026-11-09:
+  the profile changed but the Dell label stayed stale until interaction,
+  and the Dell permission unit worked at boot with charging thresholds
+  50/85 ([#51, 2026-11-09 06:49](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6782833250),
+  [23:54](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6782833850)).
+  Not repeated on core 638.
 - Framework: Framework 16 and QMK HID.
 - Intel: Wi-Fi 7 EHT, FRED, IPU7 camera, LPMD, SOF firmware, thermald,
   video acceleration.
@@ -222,7 +235,7 @@ repository on 2026-11-20.
 
 | Missing | What the source says | Issue |
 |---|---|---|
-| User manual | ADR 0067 promises a Markdown manual under `docs/manual/`; the directory does not exist ([#257, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/257#issuecomment-7034387179)) | #257, #277 |
+| User manual | ADR 0067 promises a Markdown manual under `docs/manual/`; the directory does not exist. The site has nine generated documentation pages under `site/docs/`; whether they count as the manual is open ([#257, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/257#issuecomment-7034387179)) | #257, #277 |
 | Backups | ADR 0060 chose restic backups; nothing is built ([#276, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/276)) | #276 |
 | Full keymap and cheat sheet | The system ships about 43 default bindings and no cheat sheet ([#292, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/292)) | #292 |
 | Printing | ADR 0022 accepts CUPS printing; nothing installs or enables it ([#294, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/294)) | #294 |

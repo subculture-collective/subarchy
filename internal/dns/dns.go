@@ -18,7 +18,8 @@
 // The package changes NetworkManager connection settings only. Nothing here
 // makes a newly joined network untrusted or handles captive portals; those
 // need the dispatcher the ADR describes. A connection never switched reads
-// as "not set".
+// as "not set"; resolved sends its lookups to both the network's servers
+// and the global Quad9 servers and returns the first answer.
 package dns
 
 import (
@@ -42,8 +43,10 @@ const (
 	Untrusted Mode = "untrusted"
 	Trusted   Mode = "trusted"
 	// Unset is a connection subcult dns has not switched: NetworkManager
-	// gives it the network's DNS and, as the default-route link, the
-	// routing domain "~.". It is reported, never accepted as input.
+	// gives it the network's DNS and marks its link as a default route
+	// (DefaultRoute=yes, no "~." domain), so lookups go to the network's
+	// servers and the global servers alike. It is reported, never accepted
+	// as input.
 	Unset Mode = "not set"
 )
 

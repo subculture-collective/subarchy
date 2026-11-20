@@ -791,8 +791,8 @@ def boot(disk: Path, vars_file: Path) -> bool:
             ),
             "power_key": serial.run("busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey;"
                                     " busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKeyLongPress"),
-            # DNS trust (ADR 0020), self-contained: first what a connection
-            # never switched does (printed, not judged), then untrusted
+            # DNS trust (ADR 0020), self-contained: first a lookup on the
+            # connection as first boot left it (never switched), then untrusted
             # (global Quad9 only), trusted with QEMU's resolver as the
             # user's server (its link is the default route and answers),
             # and back to untrusted, which the later checks run under.
@@ -1165,9 +1165,6 @@ finally:
     r = results
     record_budgets({"shell_main_thread_wakeups_per_minute": r["idle"], "session_rss_kb": r["mem"], "packages": r["packages"]})
     state = r["state"].strip().splitlines()[-1] if r["state"].strip() else ""
-    # Not judged: no untrusted default for new networks exists yet (ADR 0020).
-    never = re.search(r"NEVER_SWITCHED_QUERY_EXIT=(\d+)", r["dns"])
-    print(f"install-test: info: lookup on the never-switched connection exited {never.group(1) if never else 'unknown'}")
     checks = {
         "os-release ID=subarchy": "ID=subarchy" in r["osr"],
         "kernel is linux-zen": "zen" in r["kernel"],
@@ -1233,6 +1230,10 @@ finally:
         and "missing:" not in r["desktop_apps"],
         "power button: a short press is left to the session, a long press powers off": r["power_key"].split()
         == ["s", '"ignore"', "s", '"poweroff"'],
+        # Without a global ~. the never-switched link (DefaultRoute=yes, no
+        # ~.) and the global Quad9 servers both get the lookup; the link's
+        # 10.0.2.3 fails under strict TLS and Quad9 answers.
+        "DNS: a connection never switched still resolves": "NEVER_SWITCHED_QUERY_EXIT=0" in dns_parts(r["dns"])[0],
         "DNS: an untrusted connection has no servers of its own and resolves through Quad9 over strict TLS":
             dns_untrusted_ok(r["dns"]),
         "DNS: subcult dns set trusted --dns 10.0.2.3 makes the link the default route with that server, and it answers":

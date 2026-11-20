@@ -38,7 +38,7 @@ network-install one on every main push, and the full offline one on
 release tags and runs started by hand, because both per push would take
 about 100 minutes of the single slot. Since 2026-11-20 the main-push
 network-install ISO runs in `packages.yml` instead, as described under
-[[#Main pushes: build, publish, then ISO]]. A separate KVM
+[[#Build, publish, then ISO on a main push]]. A separate KVM
 smoke workflow ran on every main push until 2026-11-13; the ISO run already
 needs KVM, so it was removed to free the runner's single slot.
 
@@ -79,7 +79,7 @@ shows up after the merge. To test such a change first, start `iso.yml` by
 hand on the mirrored branch (`workflow_dispatch`). That uses the one slot, and
 a manual run on a branch sits in the queue behind main's runs.
 
-## Main pushes: build, publish, then ISO
+## Build, publish, then ISO on a main push
 
 Until 2026-11-20 a main push started two runs on this label, `iso` and
 `packages`, and nothing ordered them. Two things went wrong (read-only

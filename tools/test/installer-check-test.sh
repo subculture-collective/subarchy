@@ -103,7 +103,8 @@ conf[SUBARCHY_REPO]='https://git.subcult.tv/api/packages/subculture-collective/a
 # No server answers: it stops with a clear message before the disk is touched.
 curl() { return 7; }
 out=$( (check_sources) 2>&1) && fail "a network install with no server was accepted"
-[[ $out == *"no package server answers"*"Nothing on /dev/vda was changed."* ]] || fail "no-server message: $out"
+[[ $out == *"no answer from the Arch Linux Archive (https://archive.archlinux.org/repos/2026/11/15/core/os/x86_64/core.db)"*"Nothing on /dev/vda was changed."* ]] ||
+  fail "no-server message: $out"
 # It asks the archive at the snapshot date and the registry.
 asked=$(mktemp)
 curl() { echo "${@: -1}" >>"$asked"; }
@@ -112,7 +113,9 @@ curl() { echo "${@: -1}" >>"$asked"; }
   fail "servers asked: $(tr '\n' ' ' <"$asked")"
 # The archive alone answering is not enough.
 curl() { [[ ${*: -1} == https://archive.* ]]; }
-(check_sources) 2>/dev/null && fail "a network install was accepted with the registry not answering"
+out=$( (check_sources) 2>&1) && fail "a network install was accepted with the registry not answering"
+[[ $out == *"no answer from Subarchy's package server (https://git.subcult.tv/"*"/stable/x86_64/subarchy.db)"* ]] ||
+  fail "registry message: $out"
 # A local [subarchy] repository (the VM test's own build) needs only the archive.
 conf[SUBARCHY_REPO]=file:///run/src/build/repo
 (check_sources) || fail "a local [subarchy] repository needed the registry"

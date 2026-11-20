@@ -37,8 +37,9 @@ One profile builds two images (#329; owner's decision 2026-11-20):
   `/opt/subarchy/repo`. `subarchy-setup` then points the install at the
   stable channel's registry, and `subarchy-install` takes Arch packages from
   the Arch Linux Archive at the snapshot date the `subarchy` package ships
-  (ADR 0026). The network page says the install needs the internet. If no
-  server answers, the installer stops before it touches the disk.
+  (ADR 0026). The network page says the install needs the internet. If the
+  archive or the registry does not answer, the installer stops before it
+  touches the disk and says which one.
 
 Both live images carry `subarchy-keyring`, so the live system trusts the
 registry's key and the net install can require signed packages.

@@ -179,7 +179,7 @@ Decision map item R2. Accepted 2026-11-06.
   the stable channel: Subarchy's registry and the Arch Linux Archive at the
   shipped snapshot date ([[0026-update-model|ADR 0026]]). Its network page
   says the install needs the internet, and `subarchy-install` stops before
-  touching the disk when no server answers. CI tests `net` on every main
+  touching the disk when the archive or the registry does not answer. CI tests `net` on every main
   push and `full` on release tags and runs started by hand, because both on
   every push would hold the single KVM slot for about 100 minutes
   ([[ci-runner|KVM CI runner]]). Written with the change: neither image

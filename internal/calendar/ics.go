@@ -5,6 +5,7 @@ package calendar
 
 import (
 	"bufio"
+	"maps"
 	"slices"
 	"sort"
 	"strconv"
@@ -258,7 +259,9 @@ func parseDuration(s string) (time.Duration, bool) {
 // Occurrences expands the events into the window: single events as they
 // are, recurring ones by their RRULE (daily and weekly with BYDAY, weeks
 // starting on WKST, Monday by default; monthly by day of month or by
-// BYDAY, BYMONTHDAY, BYMONTH and BYSETPOS; yearly; INTERVAL, COUNT, UNTIL,
+// BYDAY, BYMONTHDAY, BYMONTH and BYSETPOS; yearly by date, or by BYDAY,
+// BYMONTHDAY and BYSETPOS within each BYMONTH month (DTSTART's month by
+// default; BYSETPOS counts within a month); INTERVAL, COUNT, UNTIL,
 // EXDATE). A series steps through the calendar of
 // the zone its DTSTART was written in. Overridden occurrences
 // (RECURRENCE-ID) replace the generated one.
@@ -421,6 +424,33 @@ func expand(e vevent, w Window) []time.Time {
 			}
 		}
 	case "YEARLY":
+		if rule["BYMONTH"] != "" || rule["BYDAY"] != "" || rule["BYMONTHDAY"] != "" {
+			// Each listed month of the year picks its days as a monthly
+			// rule does; BYMONTH defaults to DTSTART's month.
+			byMonth := maps.Clone(rule)
+			if byMonth["BYMONTH"] == "" {
+				byMonth["BYMONTH"] = strconv.Itoa(int(e.start.Month()))
+			}
+			january := 1 - int(e.start.Month()) // months from DTSTART's to its January
+			for n := 0; ; n += interval {
+				if !monthStart(e.start, 12*n+january).Before(until) {
+					break
+				}
+				done := false
+				for m := 0; m < 12 && !done; m++ {
+					for _, t := range monthDays(e.start, monthStart(e.start, 12*n+january+m), byMonth) {
+						if !t.Before(e.start) && !emit(t) {
+							done = true
+							break
+						}
+					}
+				}
+				if done {
+					break
+				}
+			}
+			break
+		}
 		// A date a year lacks (February 29) skips that year (RFC 5545).
 		for n := 0; ; n += interval {
 			t := e.start.AddDate(n, 0, 0)

@@ -214,7 +214,8 @@ class PublishTests(unittest.TestCase):
         def registry(request, **kwargs):
             requests.append(request)
             self.assertEqual(request.method, "HEAD")
-            self.assertTrue(request.full_url.endswith("/stable/x86_64/yay-13.1.0-2-x86_64.pkg.tar.zst"))
+            # The query keeps the CDN's cached 404 out of the answer.
+            self.assertIn("/stable/x86_64/yay-13.1.0-2-x86_64.pkg.tar.zst?ci-check=", request.full_url)
             self.assertIsNone(request.get_header("Authorization"))
             return served_as(package.name)
         with patch.object(publisher.urllib.request, "urlopen", side_effect=registry):

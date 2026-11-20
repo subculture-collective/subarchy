@@ -51,7 +51,8 @@ every publication on `main` failed its verification (found 2026-11-09).
 A database lists only one version of each package, the newest, while older
 versions stay in the registry. So when the database does not list a version,
 both ask the channel for the exact file and count it as present only if the
-answer names that file. Without this check, a version uploaded ahead of its
+answer names that file. The request carries a fresh query string because the
+CDN keeps a 404 for a file path for four hours (seen 2026-11-20). Without this check, a version uploaded ahead of its
 merge hid the previous one from runs for older commits: on 2026-11-16 the
 databases listed yay `13.1.0-3` (uploaded 15:34 UTC) and not `13.1.0-2`, so
 the run for the commit before rebuilt `13.1.0-2` and its upload failed with

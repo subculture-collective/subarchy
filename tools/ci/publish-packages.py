@@ -70,8 +70,10 @@ def served(channel, package):
     re-uploading -2 failed with HTTP 409. The registry finds a file by
     substring, so only an answer that names the requested file counts."""
     for attempt in range(ATTEMPTS):
+        # The CDN keeps a 404 for a file for four hours (seen 2026-11-20), so
+        # without the query a file uploaded since would still look absent.
         request = urllib.request.Request(
-            f"{REGISTRY}/{channel}/x86_64/{package.name}",
+            f"{REGISTRY}/{channel}/x86_64/{package.name}?ci-check={time.time_ns()}",
             headers={"User-Agent": "subarchy-ci/1"},
             method="HEAD",
         )

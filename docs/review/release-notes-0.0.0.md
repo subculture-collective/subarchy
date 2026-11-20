@@ -87,7 +87,10 @@ No other machine has run Subarchy. Nothing else is tested.
 
 Installed 2026-11-16 (owner report,
 [#51, 20:11](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6927921652)).
-Kernel `7.3.4-zen2-2-zen`, NVIDIA driver `620.70.06`. The last column is
+Kernel `7.3.4-zen2-2-zen`, NVIDIA driver `620.70.06`, from the read-only
+readback that evening
+([#51, 20:38](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6928690350)).
+The last column is
 the pending owner session #275; its steps are from the runbook on
 [#51, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-7033827474),
 which that comment says had not been run. Since the hold was lifted, the
@@ -102,7 +105,7 @@ the rows below describe core 638 only.
 | Failed units after install | None, system or user | same | Pending, step 6.1 |
 | Intel and NVIDIA OpenGL | Passed. Default context on Intel Iris Xe; explicitly offloaded context on the RTX 3050 Ti. Two context paths only, not every GPU mode | [#51, 2026-11-16 21:07](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6929359466) | Pending, steps 3.1 to 3.8 |
 | NVIDIA mode switch | Not tested | same | Pending, steps 3.1, 3.2, 3.7 and 3.8 |
-| NVIDIA runtime power on battery (P9) | **Failed** on Zen. See [[#Known limitations]] | [#195, 2026-11-17](https://github.com/subculture-collective/subarchy/issues/195#issuecomment-6936334494) | Pending, steps 1.5 and 2.1 to 2.3 |
+| NVIDIA runtime power on battery (P9) | **Failed** on Zen. See [[#Known limitations]] | [#195, 2026-11-17](https://github.com/subculture-collective/subarchy/issues/195#issuecomment-6936334494) | Pending, steps 1.5, 1.14 and 2.1 to 2.3 |
 | Wi-Fi | Connected, zero RX and TX errors in a short sample. Reconnect after reboot not recorded | [#51, 2026-11-16 21:07](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6929359466) | Pending, step 1.16 timing only |
 | Speakers | Passed. The owner heard two notes | same | Pending, step 1.10 |
 | Microphone and headphones | Not tested | same | Pending, step 1.10 |
@@ -119,7 +122,7 @@ the rows below describe core 638 only.
 | Linux LTS boot | Not booted on this install. NVIDIA DKMS is installed for both kernels | same | Pending, steps 2.1 to 2.3 |
 | Fingerprint reader | Not tested on this install | [[first-install#What the reinstall reset]] | Pending, steps 1.9 and 1.12 |
 | Google calendar (#89) | Not tested. `gws` and the calendar config were absent on 2026-11-16 | [#268 brief, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/268#issuecomment-7034389631) | Pending, Part 5 |
-| Two-monitor reconnect (#98, M4) | Not tested. The panels were not connected on 2026-11-16 | same | Pending, step 3.5 |
+| Two-monitor reconnect (#98, M4) | Not tested. The panels were not connected at the readback after the 2026-11-16 reinstall | same | Pending, step 3.5 |
 
 The row names follow the acceptance list on #51. Rows marked pending may
 turn into passes or failures after the session; the final column then
@@ -177,7 +180,8 @@ for the other fixes, so they are untested:
 - Tuxedo: keyboard backlight.
 - Peripherals: Elgato Cam Link 4K, Broadcom BCM43xx, Synaptics touchpad,
   function keys.
-- General: NVIDIA modeset, Vulkan, wireless regulatory domain.
+- General: NVIDIA modeset, Vulkan, speaker tuning, wireless regulatory
+  domain.
 
 ADR 0050 also lists fixes that are noted but not installed because their
 packages are not in Arch's repositories (the IPU7 camera, qmk-hid, several
@@ -201,7 +205,7 @@ install test, never on Sputnik.
 - Snapshot restore: `tools/iso/install-test.py` runs
   `limine-snapper-sync --restore` in the VM and checks the change made
   after the snapshot is gone (read in the repository on 2026-11-20, not
-  rerun). Checklist R1 lists the same on hardware as not run, and the
+  rerun). Checklist R1, the same check on hardware, is unchecked, and the
   owner-session runbook says the restore is not run in the session
   ([#51, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-7033827474)).
   The runbook does boot a snapshot entry from Limine (step 4.6).
@@ -216,7 +220,7 @@ install test, never on Sputnik.
 | #249 | With every USB-C port empty and AC offline, the kernel's UCSI supply `USBC000:003` reads `online=1, Charging` and UPower reports `OnBattery=false`, so the power profile stays `balanced` | Seen 2026-11-17 02:28 on core 638. The 2026-11-20 diagnosis puts the fault at or below the kernel's UCSI connector state and proposes no code change; the cold-boot, post-suspend and reconnect controls have not been run ([#249, 2026-11-20](https://github.com/subculture-collective/subarchy/issues/249#issuecomment-7033753978)). On 2026-11-15, on an earlier install, all three UCSI supplies read offline after unplugging |
 | #286 (L7) | A black screen of about 11 s before the disk passphrase prompt | Measured from boot logs on the 2026-11-14 reinstall: about 1.7 s of the 2.73 s before the prompt is NVIDIA module loading in the initrd; the rest falls in the 10 s loader phase. The gap itself has not been timed with a stopwatch, and the cause is not settled ([[first-install#Reinstall on November 14]], [[test-checklist]] F2). Open, with no fix |
 | #89 | Google calendar sync is implemented (PR #215) and unconfirmed with a real account | Not attempted as of 2026-11-20 ([#268 brief](https://github.com/subculture-collective/subarchy/issues/268#issuecomment-7034389631)) |
-| #98 | The two-monitor reconnect test (M4) is outstanding. Both ONN panels report the same serial `0x01010101`, so a saved layout follows the connector, not the panel | Panels not connected on 2026-11-16 ([#51, 2026-11-16 17:15](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6923587683), [#268 brief](https://github.com/subculture-collective/subarchy/issues/268#issuecomment-7034389631)) |
+| #98 | The two-monitor reconnect test (M4) is outstanding. Both ONN panels report the same serial `0x01010101`, so a saved layout follows the connector, not the panel | Not tested on core 638: the panels were not connected at the readback after the 2026-11-16 reinstall ([#268 brief](https://github.com/subculture-collective/subarchy/issues/268#issuecomment-7034389631)). Earlier that day, on the previous install, both panels ran in a dock layout and reported the shared serial; undock, replug and cable swaps were not observed ([#51, 2026-11-16 17:15](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6923587683)) |
 | none | The installer removes the unsigned bootstrap package database, so `pacman` reports no `[subarchy]` database until the first sync fetches the signed one. `yay` and `tzupdate` are not in the default install | Observed 2026-11-16 ([#51, 20:38](https://github.com/subculture-collective/subarchy/issues/51#issuecomment-6928690350)); described there as consistent with the installer source, not as a defect |
 
 Rows the owner deferred in the L5 ruling (#285) or the L6 ruling (#268):

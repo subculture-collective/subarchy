@@ -59,8 +59,13 @@ The build job then reads the version back from the built package
 A tag push runs only the build job. It publishes nothing: the publish job
 and `publish-packages.py` accept only a push to `main`, so the tag does not
 change what either channel receives. Whether stable gets the release
-package is #260's decision. A release ISO is built by starting the iso
-workflow on the tag.
+package is #260's decision. The iso workflow's `build-iso.sh` builds the
+release core when it runs on the tag, so a release ISO needs the iso workflow
+started on the tag.
+
+Not yet tried (2026-11-20, #278): no tag has been pushed. Whether the
+GitHub-to-Gitea mirror copies tags, and whether Gitea can start the iso
+workflow on a tag ref, are unverified.
 
 Other PKGBUILDs retain their reviewed versions. Bump `pkgver` or `pkgrel`
 when changing their content. Published versions are immutable: the uploader

@@ -28,7 +28,7 @@ jobs:
         run: test "$(df -B1 --output=avail / | tail -1)" -ge 60000000000
       - name: Install build tools
         run: pacman -Syu --noconfirm --needed base-devel git nodejs python go pacman-contrib fakeroot hypridle librsvg imagemagick xorg-xcursorgen hyprcursor python-pyte python-pillow ffmpeg ttf-dejavu ttf-jetbrains-mono-nerd qt6-multimedia
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -43,7 +43,7 @@ jobs:
           bsdtar -xf "$core" -C /tmp/core .PKGINFO etc/os-release usr/bin/subcult
           grep -E '^(VERSION|VERSION_ID|BUILD_ID)=' /tmp/core/etc/os-release
           tools/ci/check-core-version.sh /tmp/core
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5 # v3.2.1
         with:
           name: packages
           path: build/packages/
@@ -58,10 +58,10 @@ jobs:
     steps:
       - name: Install publishing and verification tools
         run: pacman -Syu --noconfirm --needed git nodejs python
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # v3.0.2
         with:
           name: packages
           path: build/packages/

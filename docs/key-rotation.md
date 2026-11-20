@@ -17,7 +17,7 @@ system gets a new keyring, and what stops working at each step. Written
 **Nothing in this procedure has been run.** It was written from the
 repository at main `9e32591` and from Gitea's public documentation. No key
 was rotated, no registry setting was changed and no installed system was
-touched. Each step below is marked *untested*; the two things that were
+touched. Each step below is marked *untested*; the things that were
 checked are listed under [[#What was checked]]. Rehearse the registry part
 with [[#A rehearsal that touches nothing real]] before relying on it.
 
@@ -117,7 +117,9 @@ These are not done, or not recorded, as of 2026-11-20:
    by location class only (for example "encrypted USB stick in a safe").
 2. Generate a revocation certificate for the key and keep it with the
    offline copy, not on `soyuz` alone. Without it, a lost key can never be
-   revoked.
+   revoked. A stored certificate carries the reason it was made with and
+   that cannot be changed later without the private key, so the notice
+   published with it must give the real reason and date.
 3. Record the key's fingerprint in this note and publish the public key in
    the repository, once #259 decides how images are signed. Until then a
    downloader has nothing to check a signature against.
@@ -138,9 +140,12 @@ These are not done, or not recorded, as of 2026-11-20:
 
 ### A2. The key is compromised (untested)
 
-1. Publish the revocation certificate at once, in the repository and
-   wherever the public key was published. Reason: "compromised", with the
-   earliest date the key may have been exposed. *Breaks:* every signature
+1. Revoke the key at once and publish the revocation in the repository
+   and wherever the public key was published. While the private key is
+   still held, make a fresh revocation with the reason "compromised"
+   (`gpg --gen-revoke`); otherwise publish the stored certificate from
+   A0.2 and state the reason in the notice. Either way, give the earliest
+   date the key may have been exposed. *Breaks:* every signature
    by the old key now shows as made by a revoked key, including good ones.
 2. State on the release page which releases were signed before that date.
    Treat any image signed after it as unverified.
@@ -156,8 +161,10 @@ These are not done, or not recorded, as of 2026-11-20:
 ### A3. The key is lost, not compromised (untested)
 
 - With a second copy (#263): restore it. Nothing changes for anyone.
-- Without one, with a revocation certificate: publish the certificate with
-  the reason "no longer used", then follow A2 steps 3 and 4.
+- Without one, with a revocation certificate: publish the certificate and
+  say in the notice that the key was lost, not compromised (the
+  certificate's own reason is fixed, see A0.2), then follow A2 steps 3
+  and 4.
 - With neither: the old key can never be revoked. Publish a new key and say
   in the repository that the old fingerprint is abandoned. Anyone who still
   trusts the old key gets no warning. This is why A0.1 and A0.2 come first.
@@ -187,7 +194,7 @@ key can be had in advance. "O" is the old key, "N" the new one.
 |---|---|---|
 | 1 | Obtain N's public key. Check its fingerprint by a second route, not only the download. | Nothing. |
 | 2 | Keyring release 1: put both public keys in `registry.key`, list both fingerprints in `subarchy-trusted`, bump `pkgver` to the date. Merge. The registry, still signing with O, publishes it. | Nothing. The publish job's client check must pass. |
-| 3 | Wait. Installed systems get release 1 through `subcult update`. There is no way to count how many have. Announce the date of step 4 in the release notes and on the site, and wait at least one stable snapshot advance (suggested: 30 days). | Nothing yet. |
+| 3 | Wait. Installed systems get release 1 through `subcult update`. There is no way to count how many have. Announce the date of step 4 in the release notes and on the site, and wait (suggested: 30 days). Each `main` build publishes the keyring to both `stable` and `edge`, so the wait is for users to run an update, not for a stable snapshot advance. | Nothing yet. |
 | 4 | Switch the registry to sign with N. | **Every system that has not installed release 1 can no longer update.** `pacman -Sy` rejects the database signature. Those systems need B3. Old ISOs install offline as before, but the system they install is in this state from its first update. |
 | 5 | Check what signs the packages already in the registry. If they still carry O's signature, each one must be published again under a new `pkgrel` before O can be revoked: published versions are immutable and the uploader skips a version that exists ([[package-publishing#Versions and retries\|why]]). The three files over 100 MB need the manual upload each time. | Nothing while both keys are trusted. If this step is skipped, step 6 makes the O-signed packages uninstallable. |
 | 6 | Keyring release 2: remove O from `registry.key` and `subarchy-trusted`, add O's fingerprint to `subarchy-revoked`, bump `pkgver`. Update the fingerprint in this note, in [[package-publishing]] and in a progress note on ADR 0025. | A system still on release 1 keeps working: it trusts N. A system that never got release 1 stays broken until B3. |
@@ -224,9 +231,11 @@ This also applies if Gitea is reinstalled and generates a new key.
    of the new fingerprint with it as well.
 5. **Publish again.** Remove the hold for that one pull request. The
    publish job's fresh-container check must pass against both channels
-   with N. Then check step B1.5: packages that still carry O's signature
-   are now uninstallable everywhere and must be published again under a
-   new `pkgrel`.
+   with N. That check downloads every declared package with `SigLevel =
+   Required`, so if stored packages still carry O's signature (B0.3,
+   unknown) it fails on them: they are uninstallable everywhere and must
+   be published again under a new `pkgrel` (step B1.5) before the job
+   can pass.
 6. **Tell users** how to recover (B3), in the release notes, on the site
    and in the repository README. Give the new fingerprint in full and the
    earliest date O may have been misused. Advise reinstalling every
@@ -248,8 +257,9 @@ step 2 is the whole protection.
 curl -fLO https://raw.githubusercontent.com/subculture-collective/subarchy/main/packaging/subarchy-keyring/registry.key
 
 # 2. Print its fingerprint. Compare all 40 characters with the fingerprint
-#    in the release notes and in docs/package-publishing.md. Stop if they
-#    differ.
+#    in the release notes or the announcement on the site. Stop if they
+#    differ. docs/package-publishing.md comes from the same repository as
+#    the key file, so matching it alone proves nothing.
 gpg --show-keys --with-fingerprint registry.key
 
 # 3. Add and locally sign the new key.
@@ -302,6 +312,11 @@ Limits, as of 2026-11-20:
   untested. After the merge, check it once with `gh workflow run
   rotation-reminder.yml -f open_now=true`; that opens the real issue early,
   which is harmless.
+- The check for an existing issue uses GitHub's issue search, which the
+  stand-in `gh` did not exercise. It is **untested** against the real
+  search. After the first real run, run the same command a second time
+  and confirm it reports the existing issue instead of opening another.
+  If the search misses it, the workflow opens a duplicate every Monday.
 - GitHub turns scheduled workflows off after 60 days without repository
   activity. This repository has had daily activity since 2026-11-06.
 - The reminder covers this one token. The registry key has no expiry and
@@ -314,6 +329,7 @@ Limits, as of 2026-11-20:
 | `gpg --show-keys` on `packaging/subarchy-keyring/registry.key` | 2026-11-20, Kvant | Fingerprint, algorithm and creation date match ADR 0025; no expiry |
 | Reminder script against a stand-in `gh`; `shellcheck` and `actionlint` 1.7.12 on the workflow | 2026-11-20, Kvant | Opens one issue inside the window or when forced; none before it or when one exists; no lint findings |
 | `python3 tools/obsidian/check-vault.py` | 2026-11-20, Kvant | Passes |
+| Review: each "Observed in the repository" item read against the named file at `9e32591`; the B3 step 1 URL fetched without credentials | 2026-11-20, Kvant | Items match the files; the URL returns HTTP 200 (the repository is public) |
 
 Everything else in this note is untested.
 

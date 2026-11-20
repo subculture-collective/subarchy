@@ -128,9 +128,10 @@ systemctl --user enable --now subarchy-snapshot.timer
 systemctl --user list-timers subarchy-snapshot.timer   # check the next run
 ```
 
-`Persistent=true` makes a missed run fire soon after re-enabling, so expect
-a snapshot pull request within about an hour. The next Monday run would
-otherwise have been 2026-11-23.
+`Persistent=true` makes a run that was missed while the timer was off fire
+soon after re-enabling. The run builds and installs a test ISO before it
+opens anything, so the pull request comes after that, not at once. The next
+Monday run would otherwise have been 2026-11-23.
 
 ## Standing up the runner and timer on another host
 

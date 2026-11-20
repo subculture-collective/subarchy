@@ -15,6 +15,7 @@ import (
 // changes. It never touches the host.
 type fakeRunner struct {
 	runs    []string
+	reads   int
 	failRun string // a Run whose line starts with this fails once
 }
 
@@ -29,6 +30,7 @@ func (r *fakeRunner) Run(_ context.Context, argv ...string) error {
 }
 
 func (r *fakeRunner) Output(_ context.Context, argv ...string) (string, error) {
+	r.reads++
 	switch {
 	case argv[0] == "nmcli" && strings.Contains(strings.Join(argv, " "), "--active"):
 		return "Home:802-3-ethernet\ntailscale0:tun\n", nil
@@ -81,6 +83,7 @@ func TestRefusals(t *testing.T) {
 		{"extra argument", []string{"set", "trusted", "Home"}},
 		{"servers on untrusted", []string{"set", "untrusted", "--dns", "10.0.0.200"}},
 		{"bad server", []string{"set", "trusted", "--dns", "dns.example"}},
+		{"empty TLS name", []string{"set", "trusted", "--dns", "10.0.0.200#"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -89,8 +92,8 @@ func TestRefusals(t *testing.T) {
 			if code != 2 {
 				t.Errorf("code = %d, want 2 (stderr %q)", code, errb)
 			}
-			if len(r.runs) != 0 {
-				t.Errorf("changed the system: %v", r.runs)
+			if len(r.runs) != 0 || r.reads != 0 {
+				t.Errorf("called the system before refusing: %d reads, runs %v", r.reads, r.runs)
 			}
 		})
 	}

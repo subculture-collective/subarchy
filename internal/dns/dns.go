@@ -144,35 +144,42 @@ func modifyArgs(name string, values []string) []string {
 	return argv
 }
 
+// Target validates a mode and its servers and returns the props values a
+// connection gets in that mode. It makes no system call, so callers can
+// refuse bad input before reading anything.
+func Target(mode Mode, servers []string) ([]string, error) {
+	if _, err := ParseMode(string(mode)); err != nil {
+		return nil, err
+	}
+	if mode == Untrusted {
+		if len(servers) > 0 {
+			return nil, fmt.Errorf("%w: --dns applies to trusted connections only", ErrInvalid)
+		}
+		return []string{"yes", "yes", "", "", "-1"}, nil
+	}
+	v4, v6, tls, err := ParseServers(servers)
+	if err != nil {
+		return nil, err
+	}
+	ignore := "no"
+	if len(servers) > 0 {
+		ignore = "yes"
+	}
+	return []string{ignore, ignore, v4, v6, tls}, nil
+}
+
 // Switch puts the named connections in mode and checks that names still
 // resolve. Input is validated before any change. If any step fails, every
 // connection goes back to the settings read at the start and is reactivated,
 // so a failed switch leaves the resolver as it was. check=false skips the
 // lookup (for use without a network).
 func Switch(ctx context.Context, r update.Runner, names []string, mode Mode, servers []string, check bool) error {
-	if _, err := ParseMode(string(mode)); err != nil {
+	target, err := Target(mode, servers)
+	if err != nil {
 		return err
 	}
 	if len(names) == 0 {
 		return fmt.Errorf("%w: no connection to change", ErrInvalid)
-	}
-	var target []string
-	switch mode {
-	case Untrusted:
-		if len(servers) > 0 {
-			return fmt.Errorf("%w: --dns applies to trusted connections only", ErrInvalid)
-		}
-		target = []string{"yes", "yes", "", "", "-1"}
-	case Trusted:
-		v4, v6, tls, err := ParseServers(servers)
-		if err != nil {
-			return err
-		}
-		ignore := "no"
-		if len(servers) > 0 {
-			ignore = "yes"
-		}
-		target = []string{ignore, ignore, v4, v6, tls}
 	}
 
 	old := make([]Profile, 0, len(names))

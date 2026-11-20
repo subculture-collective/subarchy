@@ -81,13 +81,16 @@ func run(ctx context.Context, args []string, e env) int {
 		return 2
 	}
 	var names, list []string
+	if *servers != "" {
+		list = strings.Split(*servers, ",")
+	}
+	if _, err := dns.Target(mode, list); err != nil {
+		return report(e, err)
+	}
 	if *conn != "" {
 		names = []string{*conn}
 	} else if names, err = dns.Active(ctx, e.runner); err != nil {
 		return report(e, err)
-	}
-	if *servers != "" {
-		list = strings.Split(*servers, ",")
 	}
 	if err := dns.Switch(ctx, e.runner, names, mode, list, !*noCheck); err != nil {
 		return report(e, err)

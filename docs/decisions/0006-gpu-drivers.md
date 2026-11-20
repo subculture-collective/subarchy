@@ -4,7 +4,7 @@ type: decision
 status: accepted
 adr: 6
 created: 2026-11-06
-updated: 2026-11-14
+updated: 2026-11-20
 tags: [decision, adr, foundation, gpu]
 aliases: [ADR 0006, F5, GPU drivers]
 ---

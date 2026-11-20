@@ -4,7 +4,7 @@ type: decision
 status: accepted
 adr: 36
 created: 2026-11-06
-updated: 2026-11-15
+updated: 2026-11-20
 tags: [decision, adr, shell, security]
 aliases: [ADR 0036, D3, D4, Lock screen, Idle]
 ---

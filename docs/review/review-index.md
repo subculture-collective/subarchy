@@ -20,7 +20,8 @@ review can be a yes/no pass.
 | [[open-questions\|Open questions]] | Name, licence, hosting, hardware targets, ISO |
 | [[app-list\|App list]] | Which apps ship, which are offered, default per role (owner writes) |
 | [[rice-port-review\|Rice port review]] | Which SUBCULT rice features to port, rethink or skip |
-| [[next-decisions\|Next decisions]] | Everything still open: new decisions, design work, assumptions, questions |
+| [[pending-decisions\|Pending decisions]] | Every open owner decision once, with its issue and a default (2026-11-20) |
+| [[next-decisions\|Next decisions]] | Frozen 2026-11-07: the decisions open then, kept as history |
 | [[first-install\|First install on sputnik]] | Runbook for the first real install, and what is and is not tested |
 | [[nvidia-rtd3-source-qualification\|NVIDIA RTD3 source qualification]] | Reproduce #1512's source applicability check and qualify a candidate before the remaining Zen battery test |
 | [[test-checklist\|Hardware test checklist]] | What the owner tests by hand on sputnik, and the decisions still open before release |
@@ -32,7 +33,7 @@ review can be a yes/no pass.
 
 ## How to review
 
-1. Start with [[next-decisions]]: it lists everything still open.
+1. Start with [[pending-decisions]]: it lists everything still open.
 2. Each document states a default. Change what you disagree with and leave
    the rest.
 3. When a review document is done, set its `review` property to `done`. It

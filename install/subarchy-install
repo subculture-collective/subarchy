@@ -294,7 +294,7 @@ EOF
 # and limine-snapper-sync; see /etc/limine-entry-tool.conf for all options.
 TARGET_OS_NAME="Subarchy"
 ESP_PATH="/boot"
-KERNEL_CMDLINE[default]=${cmdline@Q}
+KERNEL_CMDLINE[default]="$cmdline"
 ENABLE_UKI=yes
 CUSTOM_UKI_NAME="subarchy"
 ENABLE_LIMINE_FALLBACK=yes

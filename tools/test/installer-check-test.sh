@@ -311,8 +311,11 @@ done
 unset -f getent
 rm -f -- "$cfg"
 
-# /etc/default/limine is sourced as bash: a double quote, $ or backtick in
-# KERNEL_CMDLINE_EXTRA stays part of the command line.
+# /etc/default/limine is not sourced: limine-entry-tool (ConfigReader.java,
+# 1.40.0) takes everything after `=`, strips one pair of surrounding double
+# quotes and keeps the quotes inside as they are. A quote, $ or backtick in
+# KERNEL_CMDLINE_EXTRA reaches the kernel unchanged that way; shell quoting
+# such as '...' would become part of the command line.
 boot=$(mktemp -d)
 target=$boot
 mkdir -p "$target/boot"
@@ -320,8 +323,9 @@ unset -f subcult-hw
 luks_uuid=1234
 conf[KERNEL_CMDLINE_EXTRA]='acpi_osi="!Windows 2015" x=$HOME y=`id`'
 write_boot_config >/dev/null 2>&1 || fail "write_boot_config failed"
-got=$(bash -c 'declare -A KERNEL_CMDLINE; source "$1" && printf %s "${KERNEL_CMDLINE[default]}"' _ "$target/etc/default/limine" 2>&1) ||
-  fail "/etc/default/limine does not source: $got"
+got=$(sed -n 's/^KERNEL_CMDLINE\[default\]=//p' "$target/etc/default/limine")
+[[ $got == \"*\" ]] || fail "limine command line is not in double quotes: $got"
+got=${got#\"} got=${got%\"}
 [[ $got == *' acpi_osi="!Windows 2015" x=$HOME y=`id`' && $got == "rd.luks.name=1234=root "* ]] ||
   fail "limine command line: $got"
 [[ $(<"$target/etc/kernel/cmdline") == "$got" ]] || fail "the two command lines differ: $(<"$target/etc/kernel/cmdline")"

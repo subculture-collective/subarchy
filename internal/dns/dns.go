@@ -1,13 +1,24 @@
 // Package dns implements `subcult dns` (ADR 0020): show and change the DNS
 // trust of NetworkManager connections.
 //
-// A connection is untrusted (the default policy: the network's DNS is
-// ignored and lookups go to the system resolver's Quad9 over strict
-// DNS-over-TLS) or trusted (the network's DNS, or servers the user names).
-// The package changes NetworkManager connection settings only. The resolved
-// configuration under /usr/lib/systemd/resolved.conf.d is not touched, and
-// nothing here makes a newly joined network untrusted or handles captive
-// portals; those need the dispatcher the ADR describes.
+// Routing follows systemd-resolved's rules (systemd-resolved(8), "Protocols
+// and Routing"): a lookup goes to the servers whose routing domain matches
+// it best, and only when nothing matches to the default-route links plus the
+// global servers. The shipped resolved configuration sets Quad9 as the
+// global servers with strict DNS-over-TLS and no global routing domain.
+//
+// An untrusted connection ignores the network's DNS and has no servers of its
+// own, so the global Quad9 servers answer. A trusted connection carries the
+// network's servers (or the user's) and the routing domain "~." on both
+// address families, so its link is the best match for every name and its
+// servers answer instead of Quad9. VPN and Tailscale links keep their own
+// routing domains; a longer domain such as a tailnet name still wins over
+// "~.".
+//
+// The package changes NetworkManager connection settings only. Nothing here
+// makes a newly joined network untrusted or handles captive portals; those
+// need the dispatcher the ADR describes. A connection never switched reads
+// as "not set".
 package dns
 
 import (
@@ -15,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 
 	"git.subcult.tv/subculture-collective/subarchy/internal/update"
@@ -29,13 +41,17 @@ type Mode string
 const (
 	Untrusted Mode = "untrusted"
 	Trusted   Mode = "trusted"
+	// Unset is a connection subcult dns has not switched: NetworkManager
+	// gives it the network's DNS and, as the default-route link, the
+	// routing domain "~.". It is reported, never accepted as input.
+	Unset Mode = "not set"
 )
 
 // Modes lists the modes the command accepts.
 var Modes = []Mode{Untrusted, Trusted}
 
-// checkHost is looked up after a switch to see that the resolver still
-// answers. It is Quad9's own name, which every mode can resolve.
+// checkHost is looked up after a switch to see that the intended servers
+// answer. Any recursive resolver can resolve it.
 const checkHost = "dns.quad9.net"
 
 // ParseMode accepts the exact mode names and refuses anything else.
@@ -49,8 +65,14 @@ func ParseMode(s string) (Mode, error) {
 }
 
 // The NetworkManager properties that make up the trust setting, in the order
-// they are read and written.
-var props = []string{"ipv4.ignore-auto-dns", "ipv6.ignore-auto-dns", "ipv4.dns", "ipv6.dns", "connection.dns-over-tls"}
+// they are read and written. A dns-search entry starting with "~" is a
+// routing domain (nm-settings-nmcli(5)); "~." makes the link resolved's
+// best match for every name.
+var props = []string{"ipv4.ignore-auto-dns", "ipv6.ignore-auto-dns", "ipv4.dns", "ipv6.dns", "connection.dns-over-tls",
+	"ipv4.dns-search", "ipv6.dns-search"}
+
+// routeAll is the routing domain that sends every lookup to a link.
+const routeAll = "~."
 
 // Profile is the trust-related part of one NetworkManager connection, as
 // nmcli prints it.
@@ -67,13 +89,19 @@ func parseProfile(name, out string) (Profile, error) {
 	return Profile{Name: name, Values: lines}, nil
 }
 
-// ModeOf reports whether the connection ignores the network's DNS and has no
-// servers of its own (untrusted) or not (trusted).
+// ModeOf reports untrusted when the connection ignores the network's DNS and
+// has no servers of its own, trusted when it has the routing domain "~.",
+// and Unset otherwise.
 func ModeOf(p Profile) Mode {
 	if p.Values[0] == "yes" && p.Values[1] == "yes" && p.Values[2] == "" && p.Values[3] == "" {
 		return Untrusted
 	}
-	return Trusted
+	for _, list := range p.Values[5:7] {
+		if slices.Contains(strings.Split(list, ","), routeAll) {
+			return Trusted
+		}
+	}
+	return Unset
 }
 
 // ParseServers splits addresses (each optionally "address#tls-name") into the
@@ -155,7 +183,8 @@ func Target(mode Mode, servers []string) ([]string, error) {
 		if len(servers) > 0 {
 			return nil, fmt.Errorf("%w: --dns applies to trusted connections only", ErrInvalid)
 		}
-		return []string{"yes", "yes", "", "", "-1"}, nil
+		// Clearing dns-search also removes the "~." that trusted mode set.
+		return []string{"yes", "yes", "", "", "-1", "", ""}, nil
 	}
 	v4, v6, tls, err := ParseServers(servers)
 	if err != nil {
@@ -165,11 +194,11 @@ func Target(mode Mode, servers []string) ([]string, error) {
 	if len(servers) > 0 {
 		ignore = "yes"
 	}
-	return []string{ignore, ignore, v4, v6, tls}, nil
+	return []string{ignore, ignore, v4, v6, tls, routeAll, routeAll}, nil
 }
 
-// Switch puts the named connections in mode and checks that names still
-// resolve. Input is validated before any change. If any step fails, every
+// Switch puts the named connections in mode and checks that the intended
+// servers answer (see verify). Input is validated before any change. If any step fails, every
 // connection goes back to the settings read at the start and is reactivated,
 // so a failed switch leaves the resolver as it was. check=false skips the
 // lookup (for use without a network).
@@ -191,7 +220,7 @@ func Switch(ctx context.Context, r update.Runner, names []string, mode Mode, ser
 		old = append(old, p)
 	}
 
-	if err := apply(ctx, r, names, target, check); err != nil {
+	if err := apply(ctx, r, names, mode, target, check); err != nil {
 		var rerr error
 		for _, p := range old {
 			if e := r.Run(ctx, modifyArgs(p.Name, p.Values)...); e != nil {
@@ -210,7 +239,7 @@ func Switch(ctx context.Context, r update.Runner, names []string, mode Mode, ser
 	return nil
 }
 
-func apply(ctx context.Context, r update.Runner, names, target []string, check bool) error {
+func apply(ctx context.Context, r update.Runner, names []string, mode Mode, target []string, check bool) error {
 	for _, n := range names {
 		if err := r.Run(ctx, modifyArgs(n, target)...); err != nil {
 			return err
@@ -221,10 +250,44 @@ func apply(ctx context.Context, r update.Runner, names, target []string, check b
 			return err
 		}
 	}
-	if check {
-		if err := r.Run(ctx, "resolvectl", "query", "--cache=no", checkHost); err != nil {
-			return fmt.Errorf("lookup after the switch failed: %w", err)
+	if !check {
+		return nil
+	}
+	for _, n := range names {
+		if err := verify(ctx, r, n, mode); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+// verify checks one reactivated connection. Trusted: a lookup restricted to
+// its link (resolvectl query -i) succeeds, so the link's own servers answer.
+// Untrusted: resolved lists no servers for the link and a lookup succeeds, so
+// the answer came from the global servers (or a VPN link's routing domain),
+// never from the network. That the global servers use strict DNS-over-TLS
+// comes from the shipped resolved configuration; this does not test it.
+func verify(ctx context.Context, r update.Runner, name string, mode Mode) error {
+	out, err := r.Output(ctx, "nmcli", "-e", "no", "-g", "GENERAL.DEVICES", "connection", "show", name)
+	dev := strings.TrimSpace(out)
+	if err != nil || dev == "" {
+		return fmt.Errorf("find the device of connection %q: %v", name, err)
+	}
+	if mode == Trusted {
+		if err := r.Run(ctx, "resolvectl", "query", "--cache=no", "-i", dev, checkHost); err != nil {
+			return fmt.Errorf("lookup through %s's own DNS servers failed: %w", dev, err)
+		}
+		return nil
+	}
+	out, err = r.Output(ctx, "resolvectl", "dns", dev)
+	if err != nil {
+		return fmt.Errorf("read %s's DNS servers: %w", dev, err)
+	}
+	if _, servers, _ := strings.Cut(out, "):"); strings.TrimSpace(servers) != "" {
+		return fmt.Errorf("%s still has DNS servers: %s", dev, strings.TrimSpace(servers))
+	}
+	if err := r.Run(ctx, "resolvectl", "query", "--cache=no", checkHost); err != nil {
+		return fmt.Errorf("lookup through the system resolver failed: %w", err)
 	}
 	return nil
 }
@@ -252,6 +315,8 @@ func Status(ctx context.Context, r update.Runner) (string, error) {
 		switch {
 		case m == Untrusted:
 			detail = "network DNS ignored, system resolver"
+		case m == Unset:
+			detail = "network DNS; not switched with subcult dns"
 		case p.Values[2] != "" || p.Values[3] != "":
 			detail = "servers " + strings.Trim(p.Values[2]+","+p.Values[3], ",")
 		}

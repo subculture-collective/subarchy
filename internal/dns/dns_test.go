@@ -46,11 +46,26 @@ func (f *fake) Output(_ context.Context, argv ...string) (string, error) {
 
 func (f *fake) Has(string) bool { return true }
 
-const readHome = "nmcli -e no -g ipv4.ignore-auto-dns,ipv6.ignore-auto-dns,ipv4.dns,ipv6.dns,connection.dns-over-tls connection show Home"
+const readHome = "nmcli -e no -g ipv4.ignore-auto-dns,ipv6.ignore-auto-dns,ipv4.dns,ipv6.dns,connection.dns-over-tls,ipv4.dns-search,ipv6.dns-search connection show Home"
 
 // homeProfile is a profile that uses the network's DNS, as NetworkManager
 // creates it.
-const homeProfile = "no\nno\n\n\n-1\n"
+const homeProfile = "no\nno\n\n\n-1\n\n\n"
+
+// untrustedProfile is what `set untrusted` leaves.
+const untrustedProfile = "yes\nyes\n\n\n-1\n\n\n"
+
+// The reads the post-switch check makes for Home, whose device is wlan0.
+const (
+	devHome  = "nmcli -e no -g GENERAL.DEVICES connection show Home"
+	dnsWlan0 = "resolvectl dns wlan0"
+)
+
+// checked returns a fake that knows Home's profile and device, with resolved
+// listing linkDNS as wlan0's servers.
+func checked(profile, linkDNS string) *fake {
+	return &fake{answers: map[string]string{readHome: profile, devHome: "wlan0\n", dnsWlan0: "Link 3 (wlan0):" + linkDNS + "\n"}}
+}
 
 func TestParseMode(t *testing.T) {
 	tests := []struct {
@@ -121,10 +136,15 @@ func TestModeOf(t *testing.T) {
 		values string
 		want   Mode
 	}{
-		{"untrusted", "yes\nyes\n\n\n-1\n", Untrusted},
-		{"network DNS", homeProfile, Trusted},
-		{"own servers", "yes\nyes\n10.0.0.200\n\n0\n", Trusted},
-		{"only IPv4 ignored", "yes\nno\n\n\n-1\n", Trusted},
+		{"untrusted", untrustedProfile, Untrusted},
+		{"untrusted with a leftover search domain", "yes\nyes\n\n\n-1\nlan\n\n", Untrusted},
+		{"never switched", homeProfile, Unset},
+		{"never switched, DHCP search domain", "no\nno\n\n\n-1\nlan\n\n", Unset},
+		{"network DNS, trusted", "no\nno\n\n\n0\n~.\n~.\n", Trusted},
+		{"own servers, trusted", "yes\nyes\n10.0.0.200\n\n0\n~.\n~.\n", Trusted},
+		{"~. among other domains", "no\nno\n\n\n0\nlan,~.\n\n", Trusted},
+		{"own servers without ~.", "yes\nyes\n10.0.0.200\n\n0\n\n\n", Unset},
+		{"only IPv4 ignored", "yes\nno\n\n\n-1\n\n\n", Unset},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -146,13 +166,15 @@ func TestParseProfileRejectsShortOutput(t *testing.T) {
 }
 
 func TestSwitchUntrusted(t *testing.T) {
-	f := &fake{answers: map[string]string{readHome: homeProfile}}
+	// Undoing trust clears the link's "~." so the global servers answer;
+	// the check then sees no link servers and a working lookup.
+	f := checked("no\nno\n\n\n0\n~.\n~.\n", "")
 	err := Switch(context.Background(), f, []string{"Home"}, Untrusted, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
-		"nmcli connection modify Home ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes ipv4.dns  ipv6.dns  connection.dns-over-tls -1",
+		"nmcli connection modify Home ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes ipv4.dns  ipv6.dns  connection.dns-over-tls -1 ipv4.dns-search  ipv6.dns-search ",
 		"nmcli connection up Home",
 		"resolvectl query --cache=no dns.quad9.net",
 	}
@@ -161,15 +183,32 @@ func TestSwitchUntrusted(t *testing.T) {
 	}
 }
 
+func TestSwitchUntrustedFailsWhileTheLinkKeepsServers(t *testing.T) {
+	// If resolved still lists servers for the link, the network's DNS could
+	// answer, so the switch is undone.
+	f := checked(homeProfile, " 192.168.1.1")
+	err := Switch(context.Background(), f, []string{"Home"}, Untrusted, nil, true)
+	if err == nil || !strings.Contains(err.Error(), "still has DNS servers: 192.168.1.1") || !strings.Contains(err.Error(), "restored") {
+		t.Fatalf("error = %v, want one naming the leftover server and the restore", err)
+	}
+	for _, r := range f.runs {
+		if strings.HasPrefix(r, "resolvectl query") {
+			t.Errorf("looked up a name although the link kept servers: %v", f.runs)
+		}
+	}
+}
+
 func TestSwitchTrustedWithServers(t *testing.T) {
-	f := &fake{answers: map[string]string{readHome: "yes\nyes\n\n\n-1\n"}}
-	err := Switch(context.Background(), f, []string{"Home"}, Trusted, []string{"10.0.0.200", "10.0.0.57"}, false)
+	f := checked(untrustedProfile, " 10.0.0.200 10.0.0.57")
+	err := Switch(context.Background(), f, []string{"Home"}, Trusted, []string{"10.0.0.200", "10.0.0.57"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
-		"nmcli connection modify Home ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes ipv4.dns 10.0.0.200,10.0.0.57 ipv6.dns  connection.dns-over-tls 0",
+		"nmcli connection modify Home ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes ipv4.dns 10.0.0.200,10.0.0.57 ipv6.dns  connection.dns-over-tls 0 ipv4.dns-search ~. ipv6.dns-search ~.",
 		"nmcli connection up Home",
+		// The lookup is restricted to the link, so only its servers answer.
+		"resolvectl query --cache=no -i wlan0 dns.quad9.net",
 	}
 	if !slices.Equal(f.runs, want) {
 		t.Errorf("calls =\n%s\nwant\n%s", strings.Join(f.runs, "\n"), strings.Join(want, "\n"))
@@ -179,13 +218,26 @@ func TestSwitchTrustedWithServers(t *testing.T) {
 func TestSwitchTrustedNetworkDNS(t *testing.T) {
 	// Without servers the network's own DNS is used, in plaintext: strict
 	// DNS-over-TLS would fail against a router that does not listen on 853.
-	f := &fake{answers: map[string]string{readHome: "yes\nyes\n\n\n-1\n"}}
+	f := &fake{answers: map[string]string{readHome: untrustedProfile}}
 	if err := Switch(context.Background(), f, []string{"Home"}, Trusted, nil, false); err != nil {
 		t.Fatal(err)
 	}
-	want := "nmcli connection modify Home ipv4.ignore-auto-dns no ipv6.ignore-auto-dns no ipv4.dns  ipv6.dns  connection.dns-over-tls 0"
+	want := "nmcli connection modify Home ipv4.ignore-auto-dns no ipv6.ignore-auto-dns no ipv4.dns  ipv6.dns  connection.dns-over-tls 0 ipv4.dns-search ~. ipv6.dns-search ~."
 	if f.runs[0] != want {
 		t.Errorf("first call = %q, want %q", f.runs[0], want)
+	}
+}
+
+func TestSwitchTrustedFailsWhenTheLinkDoesNotAnswer(t *testing.T) {
+	f := checked(untrustedProfile, "")
+	f.fail = map[string]error{"resolvectl query --cache=no -i wlan0": errors.New("no appropriate name servers")}
+	err := Switch(context.Background(), f, []string{"Home"}, Trusted, []string{"10.0.0.200"}, true)
+	if err == nil || !strings.Contains(err.Error(), "wlan0's own DNS servers") || !strings.Contains(err.Error(), "restored") {
+		t.Fatalf("error = %v, want a failed link lookup and a restore", err)
+	}
+	last := f.runs[len(f.runs)-2]
+	if last != "nmcli connection modify Home ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes ipv4.dns  ipv6.dns  connection.dns-over-tls -1 ipv4.dns-search  ipv6.dns-search " {
+		t.Errorf("restore call = %q", last)
 	}
 }
 
@@ -228,7 +280,7 @@ func TestSwitchLeavesNothingChangedWhenReadFails(t *testing.T) {
 }
 
 func TestSwitchRestoresOnFailure(t *testing.T) {
-	restore := "nmcli connection modify Home ipv4.ignore-auto-dns no ipv6.ignore-auto-dns no ipv4.dns  ipv6.dns  connection.dns-over-tls -1"
+	restore := "nmcli connection modify Home ipv4.ignore-auto-dns no ipv6.ignore-auto-dns no ipv4.dns  ipv6.dns  connection.dns-over-tls -1 ipv4.dns-search  ipv6.dns-search "
 	tests := []struct {
 		name string
 		fail map[string]error
@@ -252,7 +304,8 @@ func TestSwitchRestoresOnFailure(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := &fake{answers: map[string]string{readHome: homeProfile}, fail: tt.fail}
+			f := checked(homeProfile, "")
+			f.fail = tt.fail
 			err := Switch(context.Background(), f, []string{"Home"}, Untrusted, nil, true)
 			if err == nil || !strings.Contains(err.Error(), "restored") {
 				t.Fatalf("error = %v, want one that says the old settings were restored", err)
@@ -270,11 +323,9 @@ func TestSwitchRestoresOnFailure(t *testing.T) {
 }
 
 func TestSwitchReportsWhenRestoreFailsToo(t *testing.T) {
-	f := &fake{
-		answers: map[string]string{readHome: homeProfile},
-		fail:    map[string]error{"resolvectl query": errors.New("no answer")},
-		stuck:   map[string]error{"nmcli connection up Home": errors.New("link down")},
-	}
+	f := checked(homeProfile, "")
+	f.fail = map[string]error{"resolvectl query": errors.New("no answer")}
+	f.stuck = map[string]error{"nmcli connection up Home": errors.New("link down")}
 	err := Switch(context.Background(), f, []string{"Home"}, Untrusted, nil, true)
 	if err == nil || !strings.Contains(err.Error(), "could not restore") {
 		t.Fatalf("error = %v, want one that says the restore failed", err)
@@ -284,7 +335,7 @@ func TestSwitchReportsWhenRestoreFailsToo(t *testing.T) {
 func TestSwitchRestoresEveryConnection(t *testing.T) {
 	readWork := strings.Replace(readHome, "Home", "Work", 1)
 	f := &fake{
-		answers: map[string]string{readHome: homeProfile, readWork: "no\nno\n10.1.0.1\n\n0\n"},
+		answers: map[string]string{readHome: homeProfile, readWork: "no\nno\n10.1.0.1\n\n0\n~.\n~.\n"},
 		fail:    map[string]error{"nmcli connection up Work": errors.New("activation failed")},
 	}
 	err := Switch(context.Background(), f, []string{"Home", "Work"}, Untrusted, nil, false)
@@ -294,7 +345,7 @@ func TestSwitchRestoresEveryConnection(t *testing.T) {
 	var restoredHome, restoredWork bool
 	for _, r := range f.runs {
 		restoredHome = restoredHome || strings.HasPrefix(r, "nmcli connection modify Home ipv4.ignore-auto-dns no")
-		restoredWork = restoredWork || strings.HasPrefix(r, "nmcli connection modify Work ipv4.ignore-auto-dns no ipv6.ignore-auto-dns no ipv4.dns 10.1.0.1")
+		restoredWork = restoredWork || r == "nmcli connection modify Work ipv4.ignore-auto-dns no ipv6.ignore-auto-dns no ipv4.dns 10.1.0.1 ipv6.dns  connection.dns-over-tls 0 ipv4.dns-search ~. ipv6.dns-search ~."
 	}
 	if !restoredHome || !restoredWork {
 		t.Errorf("both connections should be restored; calls:\n%s", strings.Join(f.runs, "\n"))
@@ -317,16 +368,17 @@ func TestActiveConnections(t *testing.T) {
 
 func TestStatusNamesTheModeOfEachConnection(t *testing.T) {
 	f := &fake{answers: map[string]string{
-		"nmcli -t -e no -f NAME,TYPE connection show --active": "Home:802-3-ethernet\nCafe:802-11-wireless\n",
-		readHome: homeProfile,
-		strings.Replace(readHome, "Home", "Cafe", 1): "yes\nyes\n\n\n-1\n",
+		"nmcli -t -e no -f NAME,TYPE connection show --active": "Home:802-3-ethernet\nCafe:802-11-wireless\nNew:802-11-wireless\n",
+		readHome: "no\nno\n\n\n0\n~.\n~.\n",
+		strings.Replace(readHome, "Home", "Cafe", 1): untrustedProfile,
+		strings.Replace(readHome, "Home", "New", 1):  homeProfile,
 		"resolvectl dns": "Global: 9.9.9.9#dns.quad9.net\n",
 	}}
 	got, err := Status(context.Background(), f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Home: trusted", "Cafe: untrusted", "9.9.9.9#dns.quad9.net"} {
+	for _, want := range []string{"Home: trusted (network DNS)", "Cafe: untrusted", "New: not set", "9.9.9.9#dns.quad9.net"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("status lacks %q:\n%s", want, got)
 		}

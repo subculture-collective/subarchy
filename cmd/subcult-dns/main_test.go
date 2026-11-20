@@ -34,8 +34,12 @@ func (r *fakeRunner) Output(_ context.Context, argv ...string) (string, error) {
 	switch {
 	case argv[0] == "nmcli" && strings.Contains(strings.Join(argv, " "), "--active"):
 		return "Home:802-3-ethernet\ntailscale0:tun\n", nil
+	case argv[0] == "nmcli" && strings.Contains(strings.Join(argv, " "), "GENERAL.DEVICES"):
+		return "eth0\n", nil
 	case argv[0] == "nmcli":
-		return "no\nno\n\n\n-1\n", nil
+		return "no\nno\n\n\n-1\n\n\n", nil
+	case strings.Join(argv, " ") == "resolvectl dns eth0":
+		return "Link 2 (eth0):\n", nil
 	}
 	return "Global: 9.9.9.9#dns.quad9.net\n", nil
 }
@@ -62,7 +66,7 @@ func TestMetadataListsBothRoutes(t *testing.T) {
 func TestStatus(t *testing.T) {
 	r := &fakeRunner{}
 	code, out, _ := runDNS(r)
-	if code != 0 || !strings.Contains(out, "Home: trusted") {
+	if code != 0 || !strings.Contains(out, "Home: not set") {
 		t.Errorf("code %d, output %q", code, out)
 	}
 	if len(r.runs) != 0 {
@@ -125,6 +129,21 @@ func TestSetFailureRestoresAndExitsOne(t *testing.T) {
 	last := r.runs[len(r.runs)-2:]
 	if !strings.HasPrefix(last[0], "nmcli connection modify Home ipv4.ignore-auto-dns no") || last[1] != "nmcli connection up Home" {
 		t.Errorf("did not end by restoring: %v", r.runs)
+	}
+}
+
+func TestSetTrustedChecksTheLink(t *testing.T) {
+	r := &fakeRunner{}
+	if code, _, errb := runDNS(r, "set", "trusted", "--dns", "10.0.2.3"); code != 0 {
+		t.Fatalf("code %d: %s", code, errb)
+	}
+	want := []string{
+		"nmcli connection modify Home ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes ipv4.dns 10.0.2.3 ipv6.dns  connection.dns-over-tls 0 ipv4.dns-search ~. ipv6.dns-search ~.",
+		"nmcli connection up Home",
+		"resolvectl query --cache=no -i eth0 dns.quad9.net",
+	}
+	if strings.Join(r.runs, "\n") != strings.Join(want, "\n") {
+		t.Errorf("calls =\n%s\nwant\n%s", strings.Join(r.runs, "\n"), strings.Join(want, "\n"))
 	}
 }
 
